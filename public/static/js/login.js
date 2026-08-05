@@ -20,7 +20,8 @@
         window.location.href = '/';
       }
     } else {
-      alert('ログインに失敗しました。');
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || 'ログインに失敗しました。');
     }
   };
 
@@ -39,6 +40,11 @@
       const username = document.getElementById('reg-username').value;
       const password = document.getElementById('reg-password').value;
 
+      if (!password || password.length < 8) {
+        alert('パスワードは8文字以上で指定してください。');
+        return;
+      }
+
       const res = await fetch('/api/register-family', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -55,7 +61,7 @@
         document.getElementById('username').value = username;
         document.getElementById('password').value = password;
       } else {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         alert('登録に失敗しました: ' + (data.error || '不明なエラー'));
       }
     };

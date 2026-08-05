@@ -3,17 +3,35 @@
   let currentFilter = 'all';
   let imageUrl = '';
   let currentPublicId = '';
-  let purchaseHistory = JSON.parse(localStorage.getItem('purchase_history') || '[]');
+  
+  // window.APP_CONFIG defined via inline script in HTML
+  const config = window.APP_CONFIG || { cloudName: '', uploadPreset: '', familyName: '', user: '' };
+  
+  // Safely construct user-specific LocalStorage key
+  const safeFamily = config.familyName ? encodeURIComponent(config.familyName) : 'default';
+  const safeUser = config.user ? encodeURIComponent(config.user) : 'guest';
+  const storageKey = `purchase_history:${safeFamily}:${safeUser}`;
 
-  // window.APP_CONFIG should be defined via inline script in the HTML
-  const config = window.APP_CONFIG || { cloudName: '', uploadPreset: '' };
+  // Clean up legacy global key if present
+  try {
+    if (localStorage.getItem('purchase_history')) {
+      localStorage.removeItem('purchase_history');
+    }
+  } catch (e) {}
+
+  let purchaseHistory = [];
+  try {
+    purchaseHistory = JSON.parse(localStorage.getItem(storageKey) || '[]');
+  } catch (e) {
+    purchaseHistory = [];
+  }
 
   function init() {
     const form = document.getElementById('add-form');
     const list = document.getElementById('item-list');
     const filters = document.querySelectorAll('.filter-btn');
     const uploadBtn = document.getElementById('upload-button');
-    const submitBtn = form.querySelector('button[type="submit"]');
+    const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
     const imageInput = document.getElementById('image-input');
     const previewDiv = document.getElementById('image-preview');
     const previewImg = previewDiv ? previewDiv.querySelector('img') : null;
@@ -81,6 +99,7 @@
         const formData = new FormData();
         formData.append('file', file);
         formData.append('upload_preset', config.uploadPreset);
+        
         try {
           const res = await fetch(`https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`, {
             method: 'POST',
@@ -128,7 +147,9 @@
         if (!purchaseHistory.includes(name)) {
           purchaseHistory.unshift(name);
           if (purchaseHistory.length > 20) purchaseHistory.pop();
-          localStorage.setItem('purchase_history', JSON.stringify(purchaseHistory));
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(purchaseHistory));
+          } catch (e) {}
           updateHistoryUI();
         }
         form.reset();
@@ -137,12 +158,15 @@
         currentPublicId = '';
         if (uploadBtn) uploadBtn.innerText = '📷 写真を撮る・選ぶ';
         await fetchItems();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || '商品の追加に失敗しました。');
       }
     };
 
     function updateHistoryUI() {
       if (dataList) {
-        dataList.innerHTML = purchaseHistory.map(h => `<option value="${h}">`).join('');
+        dataList.innerHTML = purchaseHistory.map(h => `<option value="${escapeHTML(h)}">`).join('');
       }
     }
 
@@ -159,8 +183,10 @@
 
     async function fetchItems() {
       const res = await fetch('/api/items');
-      items = await res.json();
-      render();
+      if (res.ok) {
+        items = await res.json();
+        render();
+      }
     }
 
     function escapeHTML(str) {
@@ -228,7 +254,7 @@
           throw new Error('Failed to update bought status');
         }
         
-        // Fetch fresh list from server in the background
+        // Fetch fresh list from server
         const listRes = await fetch('/api/items');
         if (listRes.ok) {
           items = await listRes.json();
@@ -236,7 +262,6 @@
         }
       } catch (err) {
         console.error('Failed to update bought status:', err);
-        // Rollback to original state
         if (item) {
           item.bought = originalBought;
           render();
@@ -245,10 +270,17 @@
       }
     }
 
-
     window.deleteItem = async function(id) {
-      if (!confirm('画像をCloudinaryからも完全に削除しますか？')) return;
-      await fetch('/api/items/' + id, { method: 'DELETE' });
+      if (!confirm('商品を削除しますか？（画像がある場合は併せて削除されます）')) return;
+      const res = await fetch('/api/items/' + id, { method: 'DELETE' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.imageDeleted === false) {
+          alert('商品の削除は完了しましたが、画像の外部ストレージからの削除に一部失敗した可能性があります。');
+        }
+      } else {
+        alert('削除処理に失敗しました。');
+      }
       await fetchItems();
     };
 

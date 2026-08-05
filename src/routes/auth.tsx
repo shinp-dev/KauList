@@ -2,17 +2,21 @@ import { Hono } from 'hono'
 import { setSignedCookie, deleteCookie } from 'hono/cookie'
 import { LoginForm } from '../components/LoginForm'
 import { hashPassword, verifyPassword } from '../lib/utils'
+import { getCookieSecret } from '../lib/middleware'
+import { checkRateLimit } from '../lib/rateLimit'
 import type { Bindings, Variables, Family, User } from '../types'
 
 const auth = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 
-const getCookieSecret = (c: any) => {
-  return c.env.COOKIE_SECRET || 'default-secure-cookie-secret-fallback-key-2026'
-}
-
 auth.get('/login', (c) => c.render(<LoginForm />))
 
 auth.post('/api/login', async (c) => {
+  // Rate limit check
+  const rl = await checkRateLimit(c, { action: 'login', limit: 10, windowSeconds: 60 })
+  if (!rl.success) {
+    return c.json({ success: false, error: 'リクエストが多すぎます。しばらく時間をおいてから再度お試しください。' }, 429)
+  }
+
   const { familyName, username, password } = await c.req.json()
   
   if (!username || typeof username !== 'string' || username.trim() === '') {
@@ -58,7 +62,13 @@ auth.post('/api/login', async (c) => {
   }
 
   if (authenticated) {
-    const secret = getCookieSecret(c)
+    let secret: string
+    try {
+      secret = getCookieSecret(c)
+    } catch (e) {
+      return c.json({ success: false, error: 'サーバー設定エラーが発生しました。' }, 500)
+    }
+
     await setSignedCookie(c, 'session', username, secret, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
     await setSignedCookie(c, 'family_id', familyId.toString(), secret, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
     await setSignedCookie(c, 'role', role, secret, { path: '/', httpOnly: true, secure: true, sameSite: 'Strict' })
@@ -70,6 +80,12 @@ auth.post('/api/login', async (c) => {
 
 auth.post('/api/register-family', async (c) => {
   try {
+    // Rate limit check
+    const rl = await checkRateLimit(c, { action: 'register-family', limit: 5, windowSeconds: 60 })
+    if (!rl.success) {
+      return c.json({ success: false, error: 'リクエストが多すぎます。しばらく時間をおいてから再度お試しください。' }, 429)
+    }
+
     const { familyName, username, password } = await c.req.json()
     
     if (!familyName || typeof familyName !== 'string' || familyName.trim() === '') {
@@ -84,8 +100,8 @@ auth.post('/api/register-family', async (c) => {
     if (username.length > 50) {
       return c.json({ success: false, error: '管理者名は50文字以内で入力してください。' }, 400)
     }
-    if (!password || typeof password !== 'string' || password.length < 4) {
-      return c.json({ success: false, error: 'パスワードは4文字以上で指定してください。' }, 400)
+    if (!password || typeof password !== 'string' || password.length < 8) {
+      return c.json({ success: false, error: 'パスワードは8文字以上で指定してください。' }, 400)
     }
 
     // Insert family
@@ -124,4 +140,3 @@ auth.post('/api/logout', (c) => {
 })
 
 export default auth
-

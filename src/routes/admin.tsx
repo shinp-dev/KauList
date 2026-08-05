@@ -1,21 +1,24 @@
 import { Hono } from 'hono'
 import { getSignedCookie } from 'hono/cookie'
 import { AdminPage } from '../components/AdminPage'
-import { authMiddleware, adminMiddleware } from '../lib/middleware'
+import { authMiddleware, adminMiddleware, getCookieSecret } from '../lib/middleware'
+import { checkRateLimit } from '../lib/rateLimit'
 import { hashPassword } from '../lib/utils'
 import type { Bindings, Variables, Family, User } from '../types'
 
 const admin = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 
-const getCookieSecret = (c: any) => {
-  return c.env.COOKIE_SECRET || 'default-secure-cookie-secret-fallback-key-2026'
-}
-
 admin.use('/admin', authMiddleware, adminMiddleware)
 admin.use('/api/admin/*', authMiddleware, adminMiddleware)
 
 admin.get('/admin', async (c) => {
-  const secret = getCookieSecret(c)
+  let secret: string
+  try {
+    secret = getCookieSecret(c)
+  } catch (e) {
+    return c.json({ success: false, error: 'サーバー設定エラーが発生しました。' }, 500)
+  }
+
   const user = (await getSignedCookie(c, secret, 'session')) || ''
   const familyId = c.get('family_id')
   const family = await c.env.DB.prepare('SELECT name FROM families WHERE id = ?').bind(familyId).first<Family>()
@@ -23,7 +26,13 @@ admin.get('/admin', async (c) => {
 })
 
 admin.get('/api/admin/users', async (c) => {
-  const secret = getCookieSecret(c)
+  let secret: string
+  try {
+    secret = getCookieSecret(c)
+  } catch (e) {
+    return c.json({ success: false, error: 'サーバー設定エラーが発生しました。' }, 500)
+  }
+
   const session = await getSignedCookie(c, secret, 'session')
   if (session === c.env.ADMIN_USER) {
     const users = await c.env.DB.prepare(`
@@ -40,6 +49,11 @@ admin.get('/api/admin/users', async (c) => {
 })
 
 admin.post('/api/admin/users', async (c) => {
+  const rl = await checkRateLimit(c, { action: 'admin-add-user', limit: 10, windowSeconds: 60 })
+  if (!rl.success) {
+    return c.json({ success: false, error: 'リクエストが多すぎます。しばらく時間をおいてから再度お試しください。' }, 429)
+  }
+
   const { username, password } = await c.req.json()
   
   if (!username || typeof username !== 'string' || username.trim() === '') {
@@ -48,8 +62,8 @@ admin.post('/api/admin/users', async (c) => {
   if (username.length > 50) {
     return c.json({ success: false, error: 'ユーザー名は50文字以内で入力してください。' }, 400)
   }
-  if (!password || typeof password !== 'string' || password.length < 4) {
-    return c.json({ success: false, error: 'パスワードは4文字以上で指定してください。' }, 400)
+  if (!password || typeof password !== 'string' || password.length < 8) {
+    return c.json({ success: false, error: 'パスワードは8文字以上で指定してください。' }, 400)
   }
 
   const familyId = c.get('family_id')
@@ -69,8 +83,14 @@ admin.post('/api/admin/users', async (c) => {
 })
 
 admin.delete('/api/admin/users/:id', async (c) => {
+  let secret: string
+  try {
+    secret = getCookieSecret(c)
+  } catch (e) {
+    return c.json({ success: false, error: 'サーバー設定エラーが発生しました。' }, 500)
+  }
+
   const id = c.req.param('id')
-  const secret = getCookieSecret(c)
   const session = await getSignedCookie(c, secret, 'session')
   if (session === c.env.ADMIN_USER) {
     await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(id).run()
@@ -82,4 +102,3 @@ admin.delete('/api/admin/users/:id', async (c) => {
 })
 
 export default admin
-

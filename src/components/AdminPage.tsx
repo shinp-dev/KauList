@@ -25,12 +25,12 @@ export const AdminPage = ({ familyName, user }: { familyName: string, user: stri
       <section style="margin-top: 20px;">
         <h2>家族ユーザー管理</h2>
         <form id="user-form" class="input-group" novalidate>
-          <input type="email" id="new-username" placeholder="名前" required autocapitalize="none" autocorrect="off" spellcheck={false} />
-          <input type="password" id="new-password" placeholder="パスワード" required />
+          <input type="text" id="new-username" placeholder="名前" required autocapitalize="none" autocorrect="off" spellcheck={false} />
+          <input type="password" id="new-password" placeholder="パスワード（8文字以上）" minlength={8} required />
           <button type="submit" class="primary">追加</button>
         </form>
-        <ul id="user-list" class="item-list" style="margin-top: 10px;"></ul>
-      </section>
+        <ul id="user-list" class="item-list" style="margin-top: 10px;"></ul
+      ></section>
     </div>
     <script dangerouslySetInnerHTML={{ __html: `window.CURRENT_USER = '${user}';` }} />
     <script src="/static/js/admin.js"></script>

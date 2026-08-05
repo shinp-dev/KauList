@@ -7,6 +7,7 @@
 
   async function loadUsers() {
     const res = await fetch('/api/admin/users');
+    if (!res.ok) return;
     const users = await res.json();
     const list = document.getElementById('user-list');
     if (!list) return;
@@ -36,13 +37,24 @@
       e.preventDefault();
       const username = document.getElementById('new-username').value;
       const password = document.getElementById('new-password').value;
-      await fetch('/api/admin/users', {
+
+      if (!password || password.length < 8) {
+        alert('パスワードは8文字以上で指定してください。');
+        return;
+      }
+
+      const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
-      e.target.reset();
-      loadUsers();
+      if (res.ok) {
+        e.target.reset();
+        loadUsers();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'ユーザーの登録に失敗しました。');
+      }
     };
   }
 

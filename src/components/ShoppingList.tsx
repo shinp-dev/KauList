@@ -79,7 +79,9 @@ export const ShoppingList = ({ familyName, user, role, cloudName, uploadPreset }
     <script dangerouslySetInnerHTML={{ __html: `
       window.APP_CONFIG = {
         cloudName: '${cloudName}',
-        uploadPreset: '${uploadPreset}'
+        uploadPreset: '${uploadPreset}',
+        familyName: '${familyName}',
+        user: '${user}'
       };
     ` }} />
     <script src="/static/js/main.js"></script>

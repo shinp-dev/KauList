@@ -2,12 +2,22 @@ import { getSignedCookie } from 'hono/cookie'
 import type { Context, Next } from 'hono'
 import type { Bindings, Variables } from '../types'
 
-const getCookieSecret = (c: Context<{ Bindings: Bindings, Variables: any }>) => {
-  return c.env.COOKIE_SECRET || 'default-secure-cookie-secret-fallback-key-2026'
+export const getCookieSecret = (c: Context<{ Bindings: Bindings, Variables: any }>): string => {
+  const secret = c.env.COOKIE_SECRET
+  if (!secret || typeof secret !== 'string' || secret.trim() === '') {
+    throw new Error('COOKIE_SECRET_MISSING')
+  }
+  return secret
 }
 
 export const authMiddleware = async (c: Context<{ Bindings: Bindings, Variables: Variables }>, next: Next) => {
-  const secret = getCookieSecret(c)
+  let secret: string
+  try {
+    secret = getCookieSecret(c)
+  } catch (e) {
+    return c.json({ success: false, error: 'サーバー設定エラーが発生しました。' }, 500)
+  }
+
   const session = await getSignedCookie(c, secret, 'session')
   const familyIdFromCookie = await getSignedCookie(c, secret, 'family_id')
   
@@ -25,11 +35,16 @@ export const authMiddleware = async (c: Context<{ Bindings: Bindings, Variables:
 }
 
 export const adminMiddleware = async (c: Context<{ Bindings: Bindings, Variables: Variables }>, next: Next) => {
-  const secret = getCookieSecret(c)
+  let secret: string
+  try {
+    secret = getCookieSecret(c)
+  } catch (e) {
+    return c.json({ success: false, error: 'サーバー設定エラーが発生しました。' }, 500)
+  }
+
   const role = await getSignedCookie(c, secret, 'role')
   if (role !== 'admin') {
     return c.text('Forbidden', 403)
   }
   await next()
 }
-

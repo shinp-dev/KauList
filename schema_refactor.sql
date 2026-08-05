@@ -3,6 +3,7 @@
 DROP TABLE IF EXISTS items;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS families;
+DROP TABLE IF EXISTS rate_limits;
 
 -- 1. families: ID and Name (Unique)
 CREATE TABLE families (
@@ -35,10 +36,17 @@ CREATE TABLE items (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 4. rate_limits: Table for API rate limiting
+CREATE TABLE rate_limits (
+  key TEXT PRIMARY KEY,
+  count INTEGER DEFAULT 1,
+  reset_at INTEGER NOT NULL
+);
+
 -- Initialize Default Family
 INSERT INTO families (id, name) VALUES (1, 'Default Family');
 
 -- Indices for performance optimization
 CREATE INDEX IF NOT EXISTS idx_items_family_created ON items(family_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_users_family_id ON users(family_id);
-
+CREATE INDEX IF NOT EXISTS idx_rate_limits_reset ON rate_limits(reset_at);

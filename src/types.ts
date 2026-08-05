@@ -41,6 +41,6 @@ export interface Item {
 }
 
 export interface CloudinaryResponse {
-  result: 'ok' | 'error'
+  result: 'ok' | 'not found' | 'error' | string
   [key: string]: any
 }

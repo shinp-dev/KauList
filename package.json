@@ -18,6 +18,7 @@
     "@cloudflare/workers-types": "4.20260316.1",
     "@hono/vite-build": "1.2.0",
     "@hono/vite-dev-server": "0.18.2",
+    "miniflare": "^4.20260730.0",
     "typescript": "5.8.2",
     "vite": "6.3.5",
     "vitest": "3.0.7",

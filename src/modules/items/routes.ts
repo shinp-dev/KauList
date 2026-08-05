@@ -26,10 +26,10 @@ itemsRoutes.post('/:listId/items', csrfProtection, requireListMember(), async (c
   const category = typeof body.category === 'string' ? body.category.trim() : 'other'
   const imageId = typeof body.image_id === 'number' ? body.image_id : undefined
 
-  if (!name || name.length > 50) return c.json({ success: false, error: 'Invalid name' }, 400)
+  if (!name || name.length > 100) return c.json({ success: false, error: 'Invalid name' }, 400)
   if (count < 1 || count > 99) return c.json({ success: false, error: 'Invalid count' }, 400)
-  if (!unit || unit.length > 10) return c.json({ success: false, error: 'Invalid unit' }, 400)
-  if (!['food', 'daily', 'other'].includes(category)) return c.json({ success: false, error: 'Invalid category' }, 400)
+  if (!unit || unit.length > 20) return c.json({ success: false, error: 'Invalid unit' }, 400)
+  if (!['food', 'daily', 'medicine', 'other'].includes(category)) return c.json({ success: false, error: 'Invalid category' }, 400)
 
   const service = new ItemService(c.env.DB)
   

@@ -69,7 +69,7 @@ inviteAcceptRoutes.post('/invites/accept', csrfProtection, requireAuth, async (c
   const service = new InviteService(c.env.DB)
   try {
     const { listId } = await service.acceptInvite(user.id, token)
-    return c.json({ success: true, list_id: listId })
+    return c.json({ success: true, listId: listId })
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 400)
   }

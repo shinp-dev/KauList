@@ -93,6 +93,7 @@ CREATE TABLE uploaded_images (
   FOREIGN KEY (uploaded_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
   FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
 );
+CREATE UNIQUE INDEX idx_uploaded_images_item ON uploaded_images(item_id) WHERE item_id IS NOT NULL;
 
 -- 8. rate_limits
 CREATE TABLE rate_limits (

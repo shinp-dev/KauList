@@ -26,14 +26,13 @@ authRoutes.post('/register', csrfProtection, async (c) => {
 
   const service = new AuthService(c.env.DB)
   try {
-    const { user } = await service.registerUser(loginId, displayName, passwordHash)
-    const token = await service.createSession(user.id)
+    const { token } = await service.registerAndCreateSession(loginId, displayName, passwordHash)
 
     setCookie(c, 'session_token', token, {
-      path: '/',
       httpOnly: true,
-      secure: c.env.ENVIRONMENT === 'production',
+      secure: true,
       sameSite: 'Strict',
+      path: '/',
       maxAge: 30 * 24 * 60 * 60
     })
 

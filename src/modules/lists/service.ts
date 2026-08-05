@@ -1,6 +1,8 @@
 import type { ShoppingList } from '../../types'
 import { ListRepository } from './repository'
 import { MemberRepository } from '../members/repository'
+import { InviteRepository } from '../invites/repository'
+import { ImageRepository } from '../images/repository'
 
 export class ListService {
   private listRepo: ListRepository
@@ -13,6 +15,10 @@ export class ListService {
 
   async getUserLists(userId: number): Promise<ShoppingList[]> {
     return await this.listRepo.getUserLists(userId)
+  }
+
+  async getListById(listId: number): Promise<ShoppingList | null> {
+    return await this.listRepo.getListById(listId)
   }
 
   async createList(name: string, userId: number): Promise<ShoppingList> {
@@ -41,10 +47,15 @@ export class ListService {
     // 論理削除
     await this.listRepo.softDeleteList(listId, now)
     
-    // 紐づく一時画像をすべて deletion_pending に変更
-    // (これは images repository を呼ぶか、直接更新するか。責務的に Repositoryを呼ぶべきだが)
-    await this.db.prepare(
-      "UPDATE uploaded_images SET status = 'deletion_pending', updated_at = ? WHERE list_id = ? AND status IN ('reserved', 'temporary', 'attached')"
-    ).bind(now, listId).run()
+    // 招待を失効させる
+    const inviteRepo = new InviteRepository(this.db)
+    await inviteRepo.revokeAllInvites(listId, now)
+    
+    // 画像ステータスを更新する
+    const imageRepo = new ImageRepository(this.db)
+    await imageRepo.markListImagesAsDeletionPending(listId, now)
+
+    // 画像が0件なら即時物理削除
+    await this.listRepo.deleteLogicallyDeletedListIfEmpty(listId)
   }
 }

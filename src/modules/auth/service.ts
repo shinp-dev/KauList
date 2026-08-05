@@ -15,20 +15,23 @@ export class AuthService {
     this.memberRepo = new MemberRepository(db)
   }
 
-  async registerUser(loginId: string, displayName: string, passwordHash: string): Promise<{ user: User, list: ShoppingList }> {
+  async registerAndCreateSession(loginId: string, displayName: string, passwordHash: string): Promise<{ user: User, list: ShoppingList, token: string }> {
     let user: User | undefined
     let list: ShoppingList | undefined
+    let token: string | undefined
 
     try {
       user = await this.authRepo.createUser(loginId, displayName, passwordHash)
-      
       list = await this.listRepo.createList('買い物リスト', user.id)
-      
       await this.memberRepo.addMember(list.id, user.id, 'owner')
+      token = await this.createSession(user.id)
 
-      return { user, list }
+      return { user, list, token }
     } catch (e) {
       // Reverse compensation
+      if (token) {
+        try { await this.revokeSession(token) } catch (err) {}
+      }
       if (list) {
         try { await this.memberRepo.removeMember(list.id, user!.id) } catch (err) {}
         try { await this.listRepo.deleteList(list.id) } catch (err) {}

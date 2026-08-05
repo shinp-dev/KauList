@@ -55,9 +55,15 @@ export class ImageRepository {
     ).bind(itemId, listId).first<{id: number, public_id: string}>()
   }
 
+  async markListImagesAsDeletionPending(listId: number, now: string): Promise<void> {
+    await this.db.prepare(
+      "UPDATE uploaded_images SET status = 'deletion_pending', updated_at = ? WHERE list_id = ? AND status IN ('reserved', 'temporary', 'attached')"
+    ).bind(now, listId).run()
+  }
+
   async getImagesForCleanup(oneHourAgo: string, oneDayAgo: string, now: string): Promise<any[]> {
     const res = await this.db.prepare(`
-      SELECT id, public_id, status, retry_count 
+      SELECT id, public_id, status, retry_count, list_id 
       FROM uploaded_images 
       WHERE (status = 'reserved' AND created_at < ?)
          OR (status = 'temporary' AND created_at < ? AND item_id IS NULL)

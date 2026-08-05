@@ -19,6 +19,14 @@ export class ListRepository {
     await this.db.prepare('UPDATE shopping_lists SET deleted_at = ? WHERE id = ?').bind(now, listId).run()
   }
 
+  async deleteLogicallyDeletedListIfEmpty(listId: number): Promise<void> {
+    // Only delete if NO images remain (count = 0) and deleted_at IS NOT NULL
+    const count = await this.db.prepare('SELECT COUNT(*) as c FROM uploaded_images WHERE list_id = ?').bind(listId).first<{c: number}>()
+    if (count && count.c === 0) {
+      await this.db.prepare('DELETE FROM shopping_lists WHERE id = ? AND deleted_at IS NOT NULL').bind(listId).run()
+    }
+  }
+
   async getListById(listId: number): Promise<ShoppingList | null> {
     return await this.db.prepare('SELECT * FROM shopping_lists WHERE id = ? AND deleted_at IS NULL').bind(listId).first<ShoppingList>()
   }

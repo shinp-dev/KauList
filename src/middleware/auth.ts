@@ -66,7 +66,13 @@ export function requireListMember() {
     const listId = c.req.param('listId')
     if (!listId) return c.json({ success: false, error: 'List ID required' }, 400)
 
-    const member = await c.env.DB.prepare('SELECT role FROM list_members WHERE list_id = ? AND user_id = ?').bind(listId, user.id).first<ListMember>()
+    const member = await c.env.DB.prepare(`
+      SELECT lm.role 
+      FROM list_members lm
+      JOIN shopping_lists sl ON sl.id = lm.list_id
+      WHERE lm.list_id = ? AND lm.user_id = ? AND sl.deleted_at IS NULL
+    `).bind(listId, user.id).first<ListMember>()
+    
     if (!member) {
       return c.json({ success: false, error: 'Not found' }, 404) // Hide existence
     }
@@ -83,7 +89,13 @@ export function requireListOwner() {
     const listId = c.req.param('listId')
     if (!listId) return c.json({ success: false, error: 'List ID required' }, 400)
 
-    const member = await c.env.DB.prepare('SELECT role FROM list_members WHERE list_id = ? AND user_id = ?').bind(listId, user.id).first<ListMember>()
+    const member = await c.env.DB.prepare(`
+      SELECT lm.role 
+      FROM list_members lm
+      JOIN shopping_lists sl ON sl.id = lm.list_id
+      WHERE lm.list_id = ? AND lm.user_id = ? AND sl.deleted_at IS NULL
+    `).bind(listId, user.id).first<ListMember>()
+    
     if (!member) {
       return c.json({ success: false, error: 'Not found' }, 404) // Hide existence
     }

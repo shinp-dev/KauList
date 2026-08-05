@@ -18,10 +18,17 @@ export class InviteRepository {
     ).bind(now, inviteId, listId).run()
   }
 
+  async revokeAllInvites(listId: number, now: string): Promise<void> {
+    await this.db.prepare(
+      'UPDATE invite_codes SET revoked_at = ? WHERE list_id = ? AND revoked_at IS NULL'
+    ).bind(now, listId).run()
+  }
+
   async getValidInviteByHash(tokenHash: string, now: string): Promise<InviteCode | null> {
     return await this.db.prepare(`
-      SELECT * FROM invite_codes
-      WHERE token_hash = ? AND revoked_at IS NULL AND use_count < max_uses AND expires_at > ?
+      SELECT ic.* FROM invite_codes ic
+      JOIN shopping_lists sl ON sl.id = ic.list_id
+      WHERE ic.token_hash = ? AND ic.revoked_at IS NULL AND ic.use_count < ic.max_uses AND ic.expires_at > ? AND sl.deleted_at IS NULL
     `).bind(tokenHash, now).first<InviteCode>()
   }
 

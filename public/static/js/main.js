@@ -150,11 +150,17 @@ document.addEventListener('DOMContentLoaded', () => {
         checkbox.type = 'checkbox'
         checkbox.checked = item.bought === 1
         checkbox.onchange = async () => {
-          await fetch(`/api/lists/${listId}/items/${item.id}`, {
+          const res = await fetch(`/api/lists/${listId}/items/${item.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ bought: checkbox.checked })
           })
+          if (!res.ok) {
+            const json = await res.json().catch(() => ({}))
+            alert('更新に失敗しました: ' + (json.error || '不明なエラー'))
+            checkbox.checked = !checkbox.checked
+            return
+          }
           loadItems()
         }
 
@@ -186,7 +192,12 @@ document.addEventListener('DOMContentLoaded', () => {
         delBtn.className = 'btn-danger'
         delBtn.onclick = async () => {
           if (confirm('削除しますか？')) {
-            await fetch(`/api/lists/${listId}/items/${item.id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } })
+            const res = await fetch(`/api/lists/${listId}/items/${item.id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } })
+            if (!res.ok) {
+              const json = await res.json().catch(() => ({}))
+              alert('削除に失敗しました: ' + (json.error || '不明なエラー'))
+              return
+            }
             loadItems()
           }
         }
@@ -230,8 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append('api_key', sigJson.api_key)
             formData.append('timestamp', sigJson.timestamp)
             formData.append('signature', sigJson.signature)
-            formData.append('folder', sigJson.folder)
-            formData.append('public_id', sigJson.public_id.split('/')[2])
+            formData.append('public_id', sigJson.public_id)
             
             const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
               method: 'POST',
@@ -259,11 +269,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // 4. Create Item
-        await fetch(`/api/lists/${listId}/items`, {
+        const itemRes = await fetch(`/api/lists/${listId}/items`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, count, unit, category, image_id })
         })
+        
+        const itemJson = await itemRes.json().catch(() => ({}))
+        if (!itemRes.ok || !itemJson.success) {
+          alert('商品の追加に失敗しました: ' + (itemJson.error || '不明なエラー'))
+          submitBtn.disabled = false
+          if (progress) progress.style.display = 'none'
+          return // Do not reset form
+        }
         
         itemForm.reset()
         submitBtn.disabled = false
@@ -324,7 +342,12 @@ document.addEventListener('DOMContentLoaded', () => {
               delBtn.className = 'btn-danger'
               delBtn.onclick = async () => {
                 if (confirm('削除しますか？')) {
-                  await fetch(`/api/lists/${listId}/members/${m.id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } })
+                  const res = await fetch(`/api/lists/${listId}/members/${m.id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } })
+                  const json = await res.json().catch(() => ({}))
+                  if (!res.ok || !json.success) {
+                    alert('削除に失敗しました: ' + (json.error || '不明なエラー'))
+                    return
+                  }
                   loadMembers()
                 }
               }

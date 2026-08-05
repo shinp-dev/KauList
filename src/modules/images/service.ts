@@ -1,6 +1,7 @@
 import type { Bindings } from '../../types'
 import { deleteCloudinaryImage, checkCloudinaryImageExists } from './cloudinary'
 import { ImageRepository } from './repository'
+import { ListRepository } from '../lists/repository'
 
 export class ImageService {
   private imageRepo: ImageRepository
@@ -28,6 +29,10 @@ export class ImageService {
       const result = await deleteCloudinaryImage(this.env, img.public_id)
       if (result === 'ok' || result === 'not found') {
         await this.deleteImageRecord(img.id)
+        
+        // 画像が削除されたので、親リストが空になり、かつ論理削除済みなら物理削除する
+        const listRepo = new ListRepository(this.db)
+        await listRepo.deleteLogicallyDeletedListIfEmpty(img.list_id)
       } else {
         const nextRetry = new Date(now.getTime() + Math.pow(2, img.retry_count) * 60 * 60 * 1000).toISOString()
         await this.imageRepo.updateRetryStatus(img.id, 'deletion_pending', img.retry_count + 1, nextRetry, result, now.toISOString())

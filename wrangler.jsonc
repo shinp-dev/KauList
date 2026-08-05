@@ -6,9 +6,11 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
-	// "vars": {
-	//   "MY_VAR": "my-variable"
-	// },
+	"vars": {
+		"CLOUD_NAME": "denngbse",
+		"CLOUDINARY_API_KEY": "966431115465761",
+		"ENVIRONMENT": "production"
+	},
 	// "kv_namespaces": [
 	//   {
 	//     "binding": "MY_KV_NAMESPACE",

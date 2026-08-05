@@ -1,344 +1,319 @@
-(function() {
-  let items = [];
-  let currentFilter = 'all';
-  let imageUrl = '';
-  let currentImageId = null;
+document.addEventListener('DOMContentLoaded', () => {
+  const loginForm = document.getElementById('login-form')
+  const registerForm = document.getElementById('register-form')
+  const logoutBtn = document.getElementById('logout-btn')
+  const itemForm = document.getElementById('item-form')
+  const itemsList = document.getElementById('items-list')
+  const appData = document.getElementById('app-data')
   
-  let config = { cloudName: '', familyName: '', user: '' };
-  try {
-    const configEl = document.getElementById('app-config');
-    if (configEl) {
-      config = JSON.parse(configEl.textContent || '{}');
-    }
-  } catch(e) {
-    console.error('Failed to load APP_CONFIG', e);
-  }
-  // Safely construct user-specific LocalStorage key
-  const safeFamily = config.familyName ? encodeURIComponent(config.familyName) : 'default';
-  const safeUser = config.user ? encodeURIComponent(config.user) : 'guest';
-  const storageKey = `purchase_history:${safeFamily}:${safeUser}`;
-
-  // Clean up legacy global key if present
-  try {
-    if (localStorage.getItem('purchase_history')) {
-      localStorage.removeItem('purchase_history');
-    }
-  } catch (e) {}
-
-  let purchaseHistory = [];
-  try {
-    purchaseHistory = JSON.parse(localStorage.getItem(storageKey) || '[]');
-  } catch (e) {
-    purchaseHistory = [];
-  }
-
-  function init() {
-    const form = document.getElementById('add-form');
-    const list = document.getElementById('item-list');
-    const filters = document.querySelectorAll('.filter-btn');
-    const uploadBtn = document.getElementById('upload-button');
-    const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
-    const imageInput = document.getElementById('image-input');
-    const previewDiv = document.getElementById('image-preview');
-    const previewImg = previewDiv ? previewDiv.querySelector('img') : null;
-    const dataList = document.getElementById('item-history');
-    const resetTrigger = document.getElementById('reset-trigger');
-
-    updateHistoryUI();
-
-    if (!form) return;
-
-    const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) {
-      logoutBtn.onclick = async () => {
-        await fetch('/api/logout', { method: 'POST' });
-        window.location.href = '/login';
-      };
-    }
-
-    // Hidden reset function (3 taps)
-    let tapCount = 0;
-    let lastTap = 0;
-    if (resetTrigger) {
-      resetTrigger.onclick = () => {
-        const now = Date.now();
-        if (now - lastTap < 500) {
-          tapCount++;
-        } else {
-          tapCount = 1;
-        }
-        lastTap = now;
-
-        if (tapCount >= 3) {
-          if (confirm('ローカルのデータをすべて初期化しますか？')) {
-            localStorage.clear();
-            document.cookie.split(";").forEach(function(c) { 
-              document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
-            });
-            window.location.reload();
-          }
-          tapCount = 0;
-        }
-      };
-    }
-
-    if (uploadBtn && imageInput) {
-      uploadBtn.onclick = () => imageInput.click();
-
-      imageInput.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        uploadBtn.innerText = '⌛ 署名取得中...';
-        uploadBtn.disabled = true;
-        if (submitBtn) submitBtn.disabled = true;
-
-        try {
-          // If there is already a temporary image, delete it before uploading a new one
-          if (currentImageId) {
-            await fetch(`/api/images/${currentImageId}`, { method: 'DELETE' }).catch(console.error);
-            currentImageId = null;
-            imageUrl = '';
-          }
-
-          // 1. Get signature
-          const sigRes = await fetch('/api/images/signature', { method: 'POST' });
-          const sigData = await sigRes.json();
-          if (!sigRes.ok || !sigData.signature) {
-             throw new Error('署名取得に失敗しました');
-          }
-
-          uploadBtn.innerText = '⌛ アップロード中...';
-          
-          // 2. Upload to Cloudinary
-          const formData = new FormData();
-          formData.append('file', file);
-          formData.append('api_key', sigData.api_key);
-          formData.append('timestamp', sigData.timestamp);
-          formData.append('signature', sigData.signature);
-          formData.append('folder', sigData.folder);
-          formData.append('public_id', sigData.public_id);
-
-          const clRes = await fetch(`https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`, {
-            method: 'POST',
-            body: formData
-          });
-          const clData = await clRes.json();
-          
-          if (!clData.secure_url) {
-            throw new Error('Cloudinaryアップロードエラー');
-          }
-
-          uploadBtn.innerText = '⌛ サーバー登録中...';
-
-          // 3. Complete registration
-          const compRes = await fetch('/api/images/complete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              public_id: clData.public_id,
-              version: clData.version,
-              signature: clData.signature
-            })
-          });
-          const compData = await compRes.json();
-
-          if (!compData.success) {
-            throw new Error('サーバー登録エラー');
-          }
-
-          imageUrl = clData.secure_url;
-          currentImageId = compData.image_id;
-          if (previewImg) previewImg.src = imageUrl;
-          if (previewDiv) previewDiv.style.display = 'block';
-          uploadBtn.innerText = '✅ 完了 (変更するには再度タップ)';
-          
-        } catch (err) {
-          console.error(err);
-          alert('画像のアップロードに失敗しました。');
-          uploadBtn.innerText = '📷 写真を撮る・選ぶ';
-        } finally {
-          uploadBtn.disabled = false;
-          if (submitBtn) submitBtn.disabled = false;
-        }
-      };
-    }
-
-    form.onsubmit = async (e) => {
-      e.preventDefault();
-      const name = document.getElementById('item-name').value;
-      const count = parseInt(document.getElementById('item-count').value);
-      const unit = document.getElementById('item-unit').value;
-      const category = document.getElementById('item-category').value;
-      
-      const res = await fetch('/api/items', {
+  // Dialogs
+  const shareDialog = document.getElementById('share-dialog')
+  const membersDialog = document.getElementById('members-dialog')
+  
+  if (loginForm) {
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const fd = new FormData(loginForm)
+      const data = Object.fromEntries(fd.entries())
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, count, unit, category, image_id: currentImageId })
-      });
-      
-      if (res.ok) {
-        // Add to history
-        if (!purchaseHistory.includes(name)) {
-          purchaseHistory.unshift(name);
-          if (purchaseHistory.length > 20) purchaseHistory.pop();
-          try {
-            localStorage.setItem(storageKey, JSON.stringify(purchaseHistory));
-          } catch (e) {}
-          updateHistoryUI();
-        }
-        form.reset();
-        if (previewDiv) previewDiv.style.display = 'none';
-        imageUrl = '';
-        currentImageId = null;
-        if (uploadBtn) uploadBtn.innerText = '📷 写真を撮る・選ぶ';
-        await fetchItems();
+        body: JSON.stringify(data)
+      })
+      const json = await res.json()
+      if (json.success) {
+        window.location.href = '/'
       } else {
-        const data = await res.json().catch(() => ({}));
-        alert(data.error || '商品の追加に失敗しました。');
+        const err = document.getElementById('error-message')
+        err.textContent = json.error
+        err.style.display = 'block'
       }
-    };
+    })
+  }
 
-    function updateHistoryUI() {
-      if (dataList) {
-        dataList.innerHTML = purchaseHistory.map(h => `<option value="${escapeHTML(h)}">`).join('');
+  if (registerForm) {
+    registerForm.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const fd = new FormData(registerForm)
+      const data = Object.fromEntries(fd.entries())
+      if (data.password !== data.password_confirm) {
+        const err = document.getElementById('error-message')
+        err.textContent = 'パスワードが一致しません'
+        err.style.display = 'block'
+        return
+      }
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      const json = await res.json()
+      if (json.success) {
+        window.location.href = '/'
+      } else {
+        const err = document.getElementById('error-message')
+        err.textContent = json.error
+        err.style.display = 'block'
+      }
+    })
+  }
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+      window.location.href = '/login'
+    })
+  }
+
+  const joinData = document.getElementById('join-data')
+  if (joinData) {
+    const token = joinData.dataset.token
+    document.getElementById('btn-accept-invite').addEventListener('click', async () => {
+      const res = await fetch('/api/invites/accept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      })
+      const json = await res.json()
+      if (json.success) {
+        window.location.href = '/lists/' + json.listId
+      } else {
+        const err = document.getElementById('error-message')
+        err.textContent = json.error
+        err.style.display = 'block'
+      }
+    })
+  }
+
+  if (appData) {
+    const listId = appData.dataset.listId
+    const role = appData.dataset.role
+    const cloudName = appData.dataset.cloudName
+    
+    const loadItems = async () => {
+      if (listId === '0') return
+      const res = await fetch(`/api/lists/${listId}/items`)
+      const json = await res.json()
+      if (json.success) {
+        renderItems(json.items)
       }
     }
 
-    if (filters) {
-      filters.forEach(btn => {
-        btn.onclick = () => {
-          filters.forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          currentFilter = btn.dataset.filter;
-          render();
-        };
-      });
-    }
-
-    async function fetchItems() {
-      const res = await fetch('/api/items');
-      if (res.ok) {
-        items = await res.json();
-        render();
-      }
-    }
-
-    function escapeHTML(str) {
-      if (!str) return '';
-      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-      return String(str).replace(/[&<>"']/g, m => map[m]);
-    }
-
-    function getOptimizedImageUrl(url, width = 100, height = 100) {
-      if (!url) return '';
-      if (!url.includes('cloudinary.com')) return url;
+    const renderItems = (items) => {
+      if (!itemsList) return
+      const filter = document.querySelector('input[name="filter"]:checked').value
+      itemsList.innerHTML = ''
       
-      const searchStr = '/upload/';
-      const idx = url.indexOf(searchStr);
-      if (idx === -1) return url;
+      const filtered = filter === 'all' ? items : items.filter(i => i.category === filter)
       
-      const insertIdx = idx + searchStr.length;
-      return url.slice(0, insertIdx) + `f_auto,q_auto,w_${width},h_${height},c_fill/` + url.slice(insertIdx);
-    }
+      for (const item of filtered) {
+        const li = document.createElement('li')
+        li.style.display = 'flex'
+        li.style.gap = '1rem'
+        li.style.padding = '1rem'
+        li.style.border = '1px solid var(--border)'
+        li.style.borderRadius = '8px'
+        li.style.alignItems = 'center'
+        li.style.opacity = item.bought ? '0.6' : '1'
 
-    function render() {
-      if (!list) return;
-      list.innerHTML = '';
-      const filtered = currentFilter === 'all' ? items : items.filter(i => i.category === currentFilter);
-      filtered.forEach((item) => {
-        const li = document.createElement('li');
-        li.className = 'item' + (item.bought ? ' bought' : '');
-        li.innerHTML = `
-          <div class="checkbox"></div>
-          ${item.image_url ? `<img src="${escapeHTML(getOptimizedImageUrl(item.image_url, 96, 96))}" onclick="event.stopPropagation(); showModal('${escapeHTML(item.image_url)}')" style="width: 48px; height: 48px; border-radius: 8px; object-fit: cover; cursor: zoom-in;" title="タップで拡大" />` : ''}
-          <div class="item-info">
-            <span class="item-name">${escapeHTML(item.name)}</span>
-            <span class="item-meta">購入数: <span class="item-count-label">${escapeHTML(item.count)}${escapeHTML(item.unit)}</span></span>
-            <span class="badge badge-${escapeHTML(item.category)}">${escapeHTML(getCategoryName(item.category))}</span>
-          </div>
-          <button onclick="event.stopPropagation(); deleteItem(${item.id})" style="margin-left:auto; background:none; border:none; font-size:1.2em; cursor:pointer; padding:5px;">🗑️</button>
-        `;
-        li.onclick = () => toggleBought(item.id, !item.bought);
-        list.appendChild(li);
-      });
-    }
+        const checkbox = document.createElement('input')
+        checkbox.type = 'checkbox'
+        checkbox.checked = item.bought === 1
+        checkbox.onchange = async () => {
+          await fetch(`/api/lists/${listId}/items/${item.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bought: checkbox.checked })
+          })
+          loadItems()
+        }
 
-    function getCategoryName(cat) {
-      const names = { dad: '父用', mom: '母用', kids: '子ども用', other: 'その他' };
-      return names[cat] || cat;
-    }
+        const details = document.createElement('div')
+        details.style.flex = '1'
+        const title = document.createElement('div')
+        title.style.fontWeight = 'bold'
+        title.style.textDecoration = item.bought ? 'line-through' : 'none'
+        title.textContent = `${item.name} (${item.count}${item.unit})`
+        
+        details.appendChild(title)
+        
+        li.appendChild(checkbox)
+        
+        if (item.image_url) {
+          const img = document.createElement('img')
+          img.src = item.image_url.replace('/upload/', '/upload/w_100,h_100,c_fill/') // thumbnail
+          img.style.width = '60px'
+          img.style.height = '60px'
+          img.style.objectFit = 'cover'
+          img.style.borderRadius = '4px'
+          li.appendChild(img)
+        }
 
-    async function toggleBought(id, bought) {
-      const item = items.find(i => i.id === id);
-      const originalBought = item ? item.bought : 0;
+        li.appendChild(details)
 
-      // Optimistic UI update
-      if (item) {
-        item.bought = bought ? 1 : 0;
-        render();
+        const delBtn = document.createElement('button')
+        delBtn.textContent = '削除'
+        delBtn.className = 'btn-danger'
+        delBtn.onclick = async () => {
+          if (confirm('削除しますか？')) {
+            await fetch(`/api/lists/${listId}/items/${item.id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } })
+            loadItems()
+          }
+        }
+        li.appendChild(delBtn)
+
+        itemsList.appendChild(li)
       }
+    }
 
-      try {
-        const res = await fetch(`/api/items/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bought })
-        });
-        if (!res.ok) {
-          throw new Error('Failed to update bought status');
+    const radios = document.querySelectorAll('input[name="filter"]')
+    radios.forEach(r => r.addEventListener('change', loadItems))
+
+    if (itemForm) {
+      itemForm.addEventListener('submit', async (e) => {
+        e.preventDefault()
+        const submitBtn = itemForm.querySelector('button[type="submit"]')
+        submitBtn.disabled = true
+        const progress = document.getElementById('upload-progress')
+        
+        const name = document.getElementById('item-name').value
+        const count = parseInt(document.getElementById('item-count').value, 10)
+        const unit = document.getElementById('item-unit').value
+        const category = document.getElementById('item-category').value
+        const fileInput = document.getElementById('item-image')
+        const file = fileInput.files[0]
+        
+        let image_id = undefined
+        
+        if (file) {
+          progress.style.display = 'block'
+          
+          try {
+            // 1. Signature
+            const sigRes = await fetch(`/api/lists/${listId}/images/signature`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+            const sigJson = await sigRes.json()
+            if (!sigJson.success) throw new Error(sigJson.error)
+            
+            // 2. Cloudinary Upload
+            const formData = new FormData()
+            formData.append('file', file)
+            formData.append('api_key', sigJson.api_key)
+            formData.append('timestamp', sigJson.timestamp)
+            formData.append('signature', sigJson.signature)
+            formData.append('folder', sigJson.folder)
+            formData.append('public_id', sigJson.public_id.split('/')[2])
+            
+            const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+              method: 'POST',
+              body: formData
+            })
+            const uploadData = await uploadRes.json()
+            if (uploadData.error) throw new Error(uploadData.error.message)
+            
+            // 3. Complete
+            const compRes = await fetch(`/api/lists/${listId}/images/complete`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ public_id: sigJson.public_id, version: uploadData.version, signature: uploadData.signature })
+            })
+            const compJson = await compRes.json()
+            if (!compJson.success) throw new Error(compJson.error)
+            
+            image_id = compJson.image_id
+          } catch (err) {
+            alert('画像アップロードに失敗しました: ' + err.message)
+            submitBtn.disabled = false
+            progress.style.display = 'none'
+            return
+          }
         }
         
-        // Fetch fresh list from server
-        const listRes = await fetch('/api/items');
-        if (listRes.ok) {
-          items = await listRes.json();
-          render();
+        // 4. Create Item
+        await fetch(`/api/lists/${listId}/items`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, count, unit, category, image_id })
+        })
+        
+        itemForm.reset()
+        submitBtn.disabled = false
+        if (progress) progress.style.display = 'none'
+        loadItems()
+      })
+    }
+    
+    // Share Dialog
+    const btnShare = document.getElementById('btn-share')
+    if (btnShare && shareDialog) {
+      btnShare.addEventListener('click', async () => {
+        const res = await fetch(`/api/lists/${listId}/invites`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        const json = await res.json()
+        if (json.success) {
+          const url = `${window.location.origin}/join?code=${json.invite.token}`
+          document.getElementById('invite-url').value = url
+          shareDialog.showModal()
+        } else {
+          alert(json.error)
         }
-      } catch (err) {
-        console.error('Failed to update bought status:', err);
-        if (item) {
-          item.bought = originalBought;
-          render();
-        }
-        alert('通信エラーが発生したため、購入ステータスの更新に失敗しました。');
-      }
+      })
+      
+      document.getElementById('btn-close-share').addEventListener('click', () => shareDialog.close())
+      document.getElementById('btn-copy-invite').addEventListener('click', () => {
+        const input = document.getElementById('invite-url')
+        input.select()
+        document.execCommand('copy')
+        alert('コピーしました')
+      })
     }
 
-    window.deleteItem = async function(id) {
-      if (!confirm('商品を削除しますか？（画像がある場合は併せて削除されます）')) return;
-      const res = await fetch('/api/items/' + id, { method: 'DELETE' });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.imageDeleted === false) {
-          alert('商品の削除は完了しましたが、画像の外部ストレージからの削除に一部失敗した可能性があります。');
+    // Members Dialog
+    const btnMembers = document.getElementById('btn-members')
+    if (btnMembers && membersDialog) {
+      const loadMembers = async () => {
+        const res = await fetch(`/api/lists/${listId}/members`)
+        const json = await res.json()
+        if (json.success) {
+          const list = document.getElementById('members-list')
+          list.innerHTML = ''
+          for (const m of json.members) {
+            const li = document.createElement('li')
+            li.style.display = 'flex'
+            li.style.justifyContent = 'space-between'
+            li.style.alignItems = 'center'
+            li.style.padding = '0.5rem'
+            li.style.border = '1px solid var(--border)'
+            li.style.borderRadius = '4px'
+            
+            const info = document.createElement('div')
+            info.textContent = `${m.display_name} (@${m.login_id}) - ${m.role}`
+            li.appendChild(info)
+            
+            if (m.role !== 'owner') {
+              const delBtn = document.createElement('button')
+              delBtn.textContent = '削除'
+              delBtn.className = 'btn-danger'
+              delBtn.onclick = async () => {
+                if (confirm('削除しますか？')) {
+                  await fetch(`/api/lists/${listId}/members/${m.id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } })
+                  loadMembers()
+                }
+              }
+              li.appendChild(delBtn)
+            }
+            list.appendChild(li)
+          }
         }
-      } else {
-        alert('削除処理に失敗しました。');
       }
-      await fetchItems();
-    };
 
-    window.showModal = function(url) {
-      const modal = document.getElementById('image-modal');
-      const modalImg = document.getElementById('modal-img');
-      if (modal && modalImg) {
-        modalImg.src = url;
-        modal.style.display = 'flex';
-      }
-    };
+      btnMembers.addEventListener('click', () => {
+        loadMembers()
+        membersDialog.showModal()
+      })
+      
+      document.getElementById('btn-close-members').addEventListener('click', () => membersDialog.close())
+    }
 
-    window.closeModal = function() {
-      const modal = document.getElementById('image-modal');
-      if (modal) modal.style.display = 'none';
-    };
-
-    fetchItems();
+    // Initial load
+    loadItems()
   }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-})();
+})

@@ -1,123 +1,101 @@
-# Family Shopper 🛒
+# Shared Shopper 🛒
 
-家族で同じお買い物リストを共有・管理できる、シンプルで直感的な Web アプリケーションです。
-Cloudflare Workers, D1 Database, および Cloudinary を活用した、モダンで高速な SPA (Single Page Application) です。
+買い物リストをユーザー間で共有できる、シンプルな買い物リスト管理アプリケーションです。
 
----
+## 概要
 
-## ✨ 主な機能
+「Shared Shopper」は、個人アカウントを作成し、複数の「買い物リスト」を作成・共有できるサービスです。
+家族、同棲相手、ルームシェア、実家への買い物支援など、さまざまなグループや用途で利用できます。
 
-- **家族間でのリスト共有**: 家族で同じ買い物リストを共有し、追加や購入状態を確認できます。
-- **写真付きアイテム管理**: Cloudinaryの署名付きアップロード（Signed Upload）により、商品写真を追加できます。アップロードに失敗した一時画像や商品から削除された画像は、サーバー側で順次クリーンアップされます。
-- **拡大表示**: リストの画像サムネイルをタップすると、大画面で詳細を確認できます。
-- **家族メンバー管理**: 管理者が家族用のメンバーアカウント（8文字以上のパスワード）を発行・管理できます。
-- **カテゴリフィルタ**: 「父用」「母用」「子ども用」「その他」（4種類固定）でリストを素早く絞り込み。
-- **入力補完**: 過去に入力した商品名を端末内で記憶し、候補表示（データリスト）をサポート。
-- **モバイル対応**: スマホのカメラやギャラリーから直接アップロードできるUI。
+## 主な機能
 
-### ⚠️ 機能に関する注記
-- **更新方式**: 画面の操作や手動更新を行った際に最新状態を取得します（自動リアルタイム通信には未対応です）。
-- **入力履歴**: 商品名の入力履歴は、サーバーではなくご利用の端末（LocalStorage）に保存されます。
-- **形態**: 本アプリは Web アプリケーションです（ネイティブアプリやオフライン利用、メール通知には対応していません）。
+- **個人アカウント管理**: ユーザー名とパスワードによる認証
+- **複数リスト管理**: 用途ごとに複数の買い物リストを作成・切り替え
+- **招待コードによる共有**: オーナーが発行した招待URLから、他のユーザーがリストに参加可能
+- **権限管理**:
+  - `owner` (作成者): リスト名変更、リスト削除、メンバー管理、招待コード発行・失効
+  - `member` (招待されたユーザー): リストの閲覧、商品の追加・更新・削除
+- **商品画像添付 (Signed Upload)**: Cloudinaryを活用し、サーバーを経由せずに画像を安全に直接アップロード。画像付きの分かりやすい商品管理が可能。
+- **カテゴリ分類**: 食品、日用品、薬・衛生用品、その他の4カテゴリで分類。
 
----
+## 技術スタック
 
-## 🔒 データ保存先とセキュリティ
+- **プラットフォーム**: Cloudflare Workers
+- **フレームワーク**: Hono (モジュラーモノリス構成)
+- **データベース**: Cloudflare D1
+- **画像ストレージ**: Cloudinary
+- **フロントエンド**: Hono JSX + Vanilla JS / CSS
+- **認証**: サーバーサイドセッション (HttpOnly Cookie), PBKDF2-SHA256ハッシュ
 
-| データ種別 | 保存先 / 方式 | 説明 |
-| :--- | :--- | :--- |
-| **商品・家族・ユーザー情報** | **Cloudflare D1** | SQLite 互換のリレーショナルデータベース |
-| **商品写真** | **Cloudinary** | クラウドストレージ（`uploaded_images` テーブルで所有権を厳格に管理） |
-| **商品名入力履歴** | **LocalStorage** | ご利用端末のブラウザ内（`familyName` と `username` ごとに分離） |
-| **パスワード** | **PBKDF2-SHA256** | 100,000 回のソルト付きハッシュ化 |
-| **ログイン状態** | **署名付き Cookie** | `COOKIE_SECRET` で署名された HttpOnly / Secure / SameSite Cookie |
-| **APIアクセス制限** | **Cloudflare D1** | 簡易的なレート制限（本格的なWAFの代替ではありません。DB障害時はフェイルオープンします） |
+## セキュリティ設計
 
----
+- **サーバーサイドセッション**: セッション情報をデータベースで管理し、Cookieには推測不能な乱数トークンのみを保存。
+- **アクセス制御**: `requireListMember`、`requireListOwner` などのミドルウェアでリストごとの権限を厳格にチェック。
+- **CSRF対策**: Origin/Hostヘッダーの検証と、JSON `Content-Type` の強制。
+- **画像ライフサイクル管理**: 未使用の画像（予約済み・一時アップロード・削除失敗）は定期バッチ (`waitUntil`) により確実にクリーンアップ。
+- **レート制限**: D1を用いたログインID/IP/リストID単位でのレート制限。※ これは簡易的な制限であり、本番環境ではCloudflare WAF等の併用が推奨されます。
 
-## 🚀 テクノロジースタック
+## ローカル環境構築
 
-- **Frontend/Backend**: [Hono](https://hono.dev/) (Vite)
-- **Runtime**: [Cloudflare Workers](https://workers.cloudflare.com/)
-- **Database**: [Cloudflare D1](https://developers.cloudflare.com/d1/)
-- **Storage**: [Cloudinary](https://cloudinary.com/) (画像保存)
-- **Language**: TypeScript
+### 前提条件
+- Node.js (v20以上推奨)
+- Cloudinary アカウント (画像アップロード機能を使用する場合)
 
----
-
-## 🛠️ セットアップとデプロイ手順
-
-### 1. 環境変数の設定
-
-Cloudflare のダッシュボードまたは `wrangler` にて、以下の環境変数を設定してください。
-
-| 名前 | 必須 | 説明 |
-| :--- | :---: | :--- |
-| `COOKIE_SECRET` | **必須** | **セッション署名用秘密鍵**（十分に長いランダムな文字列を設定してください） |
-| `ADMIN_USER` | **必須** | 初回システム管理者のログインユーザー名 |
-| `ADMIN_PASS` | **必須** | 初回システム管理者のログインパスワード（8文字以上推奨） |
-| `CLOUD_NAME` | **必須** | Cloudinary の Cloud Name |
-| `CLOUDINARY_API_KEY` | **必須** | Cloudinary の API Key (署名・画像削除用) |
-| `CLOUDINARY_API_SECRET` | **必須** | Cloudinary の API Secret (署名・画像削除用) |
-
----
-
-### 2. データベースの構築・マイグレーション
-
-**【新規構築の場合】**
-`schema.sql` はテーブルを初期から作成するためのファイルです（`DROP TABLE`等の破壊的処理を含みます。既存データがある環境には実行しないでください）。
-```bash
-# 新規ローカル環境のD1データベース作成
-npx wrangler d1 execute family-shopper-db --file=schema.sql --local
-```
-
-**【既存環境の更新（マイグレーション）の場合】**
-`migrations/` フォルダ内の非破壊マイグレーションSQLファイルを使用します。
-実行前に必ず `wrangler d1 export` コマンドでデータのバックアップを取得してください。
-```bash
-# 本番データベースのバックアップ取得
-npx wrangler d1 export family-shopper-db --remote --output=./backup.sql
-
-# 本番DBへのマイグレーション適用例（番号順にすべて実行してください）
-npx wrangler d1 execute family-shopper-db --file=migrations/0001_add_rate_limits.sql --remote
-npx wrangler d1 execute family-shopper-db --file=migrations/0002_add_uploaded_images.sql --remote
-npx wrangler d1 execute family-shopper-db --file=migrations/0003_harden_uploaded_images.sql --remote
-```
-
----
-
-### 3. ローカル開発サーバーの起動
-
+### 1. リポジトリのクローンと依存関係インストール
 ```bash
 npm install
-npm run dev
 ```
 
----
+### 2. 環境変数の設定
+`.dev.vars` ファイルを作成し、Cloudinaryの認証情報を設定してください。
+※ 画像機能を使用しない場合はダミー値でも起動は可能ですが、アップロード機能はエラーになります。
 
-### 4. デプロイ
+```env
+CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+```
+
+### 3. データベースの初期化
+本アプリケーションは、バージョンアップに伴い既存データ（家族モデル）と互換性のない新しいデータベース構成（共有リストモデル）へと刷新されました。
+
+> **注意 (破壊的マイグレーション)**:
+> `migrations/0004_rebuild_to_shared_lists.sql` は既存のテーブルをすべて `DROP` し、新しい構造に作り直します。既存データはすべて削除されるため、適用には十分ご注意ください。
+
+```bash
+# マイグレーションの実行 (既存データをすべて破棄して新スキーマを作成)
+npx wrangler d1 execute family-shopper-db --file=migrations/0004_rebuild_to_shared_lists.sql --local
+```
+
+### 4. 開発サーバーの起動
+```bash
+npm run dev
+```
+`http://localhost:5173` でアプリケーションにアクセスできます。
+
+## テストとビルド
+
+```bash
+# 型チェック
+npm run typecheck
+
+# ユニットテスト / 統合テスト
+npm run test
+
+# プロダクションビルド
+npm run build
+```
+
+## デプロイ
+
+Cloudflare Pages / Workers へのデプロイコマンド：
 
 ```bash
 npm run deploy
 ```
+本番環境へデプロイ後、CloudflareダッシュボードからD1バインディングおよび環境変数の設定を行ってください。
+本番用のデータベース初期化も忘れずに実施してください。
 
----
-
-## 📖 使い方
-
-1. **初期ログイン / 家族グループ登録**:
-   - 既存の管理者資格情報でログインするか、「新しい家族（グループ）を作成する」から登録します。
-2. **家族メンバーの追加**:
-   - 管理者ページから、家族のユーザー名とパスワード（8文字以上）を登録します。
-3. **お買い物リストの作成**:
-   - メイン画面で欲しい商品を追加します。必要に応じて写真を撮っておくと便利です。
-4. **購入完了**:
-   - お店で購入したら、リストのアイテムをタップして完了（チェック）にします。
-5. **削除**:
-   - 不要になったアイテムはゴミ箱アイコンで削除します（Cloudinary 上の画像も連動して削除を試みます。万が一削除に失敗した場合は、一定確率で再試行用レコードが処理されます）。
-
----
-
-## 📄 ライセンス
-
-MIT
+```bash
+npx wrangler d1 execute family-shopper-db --file=migrations/0004_rebuild_to_shared_lists.sql --remote
+```

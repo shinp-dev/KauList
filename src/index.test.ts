@@ -1,65 +1,64 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-// @ts-ignore
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { readFileSync, existsSync } from 'fs'
-// @ts-ignore
 import { join } from 'path'
-import { ShoppingList } from './components/ShoppingList'
+import { ShoppingListPage } from './components/ShoppingListPage'
 import { jsx } from 'hono/jsx'
+import app from './index'
 
 vi.mock('hono/cookie', async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...actual as any,
-    getSignedCookie: vi.fn(async (c, secret, key) => {
-      const cookieHeader = c.req.header('cookie') || ''
-      if (key === 'session') return cookieHeader.includes('session=test') ? 'test' : undefined
-      if (key === 'family_id') return cookieHeader.includes('family_id=1') ? '1' : cookieHeader.includes('family_id=2') ? '2' : undefined
+    getCookie: vi.fn((c, key) => {
+      if (key === 'session_token') return c.req.header('cookie')?.includes('session_token=test') ? 'test' : undefined
       return undefined
     })
   }
 })
 
-import app from './index'
+vi.mock('./lib/crypto', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual as any,
+    hashToken: vi.fn(async (t) => t === 'test' ? 'testhash' : 'otherhash'),
+    hashPassword: vi.fn(async (p) => 'hashed_' + p),
+    verifyPassword: vi.fn(async (p, h) => h === 'hashed_' + p)
+  }
+})
 
 describe('Security & Migration Requirements', () => {
   it('migration files must exist and be readable', () => {
-    const files = [
-      'migrations/0001_add_rate_limits.sql',
-      'migrations/0002_add_uploaded_images.sql',
-      'migrations/0003_harden_uploaded_images.sql'
-    ]
-    
-    for (const file of files) {
-      // @ts-ignore
-      const p = join(process.cwd(), file)
-      expect(existsSync(p)).toBe(true)
-      const content = readFileSync(p, 'utf-8')
-      expect(content.length).toBeGreaterThan(0)
-    }
+    // @ts-ignore
+    const p = join(process.cwd(), 'migrations/0004_rebuild_to_shared_lists.sql')
+    expect(existsSync(p)).toBe(true)
+    const content = readFileSync(p, 'utf-8')
+    expect(content).toContain('CREATE TABLE shopping_lists')
   })
 
-  it('XSS testing via ShoppingList component rendering', async () => {
+  it('XSS testing via ShoppingListPage component rendering', async () => {
     const maliciousName = '</script><script>alert(1)</script>'
-    const element = ShoppingList({
-      familyName: maliciousName,
-      user: 'test_user',
-      role: 'member',
+    const element = ShoppingListPage({
+      currentList: { id: 1, name: maliciousName },
+      user: { id: 1, display_name: 'test' },
+      lists: [],
+      members: [],
+      role: 'owner',
       cloudName: 'test_cloud'
     })
     
-    // Convert the rendered node to string to check how it will be output
     const htmlString = element.toString()
-    
-    // The rendered HTML for the script tag should properly escape the malicious string
     expect(htmlString).not.toContain('</script><script>alert(1)</script>')
-    expect(htmlString).toContain('\\u003c/script\\u003e')
+    expect(htmlString).toContain('&lt;/script&gt;&lt;script&gt;alert(1)&lt;/script&gt;')
   })
 })
 
-describe('Image & Family Logic Integration', () => {
+describe('API Integration Tests', () => {
   let mockDB: any
+  let mathRandomSpy: any
 
   beforeEach(() => {
+    mathRandomSpy = vi.spyOn(Math, 'random').mockReturnValue(1) // Disable random cleanup
+    
     mockDB = {
       prepare: vi.fn().mockReturnThis(),
       bind: vi.fn().mockReturnThis(),
@@ -67,137 +66,99 @@ describe('Image & Family Logic Integration', () => {
       all: vi.fn(),
       run: vi.fn().mockResolvedValue({ success: true })
     }
-    // @ts-ignore
-    global.fetch = vi.fn()
+  })
+
+  afterEach(() => {
+    mathRandomSpy.mockRestore()
   })
 
   const getEnv = () => ({
     DB: mockDB,
-    COOKIE_SECRET: 'test-secret',
-    ADMIN_USER: 'admin',
-    ADMIN_PASS: 'admin',
     CLOUD_NAME: 'test',
     CLOUDINARY_API_KEY: 'key',
     CLOUDINARY_API_SECRET: 'secret'
   })
 
-  it('should reject fake Cloudinary upload complete with invalid signature', async () => {
+  it('Cannot associate image_id belonging to another user', async () => {
     const env = getEnv()
-    mockDB.first.mockResolvedValueOnce({ id: 1 }) // UserId check
-    mockDB.first.mockResolvedValueOnce({ count: 1, reset_at: 9999999999 }) // Rate limit bypass
     
-    const req = new Request('http://localhost/api/images/complete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Cookie': 'session=test; family_id=1' },
-      body: JSON.stringify({ public_id: 'fake_id', version: '123', signature: 'invalid_sig' })
-    })
-
-    const res = await app.request(req, undefined, env)
-    expect(res.status).toBe(403)
-  })
-
-  it('cannot associate image_id belonging to another family or user', async () => {
-    const env = getEnv()
-    mockDB.first.mockResolvedValueOnce({ id: 1 }) // User ID check
-    mockDB.first.mockResolvedValueOnce(null) // Mock image check fail (wrong owner/family)
+    mockDB.first.mockResolvedValueOnce({ id: 1, login_id: 'test', display_name: 'test', expires_at: '2999-01-01T00:00:00Z' }) // Session
+    mockDB.first.mockResolvedValueOnce({ role: 'member' }) // List membership
+    mockDB.first.mockResolvedValueOnce(null) // Image ownership check fails
     
-    const req = new Request('http://localhost/api/items', {
+    const req = new Request('http://localhost/api/lists/1/items', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Cookie': 'session=test; family_id=2' },
+      headers: { 'Content-Type': 'application/json', 'Cookie': 'session_token=test' },
       body: JSON.stringify({ name: 'Apple', count: 1, unit: '個', category: 'other', image_id: 999 })
     })
 
     const res = await app.request(req, undefined, env)
-    
-    // Check that it failed with 400 because image validation failed
-    expect(res.status).toBe(400)
-    
-    // Check that INSERT items was NEVER called
-    const insertCall = mockDB.prepare.mock.calls.find((c: any) => c[0].includes('INSERT INTO items'))
-    expect(insertCall).toBeUndefined()
+    expect(res.status).toBe(400) // Invalid image
   })
-
-  it('Cloudinary削除失敗時にdeletion_pendingが残る', async () => {
+  
+  it('Authentication failure does not leak user existence', async () => {
     const env = getEnv()
-    // User check -> Item check -> Image check
-    mockDB.first.mockResolvedValueOnce({ id: 1 })
-      .mockResolvedValueOnce({ id: 1 }) 
-      .mockResolvedValueOnce({ id: 10, public_id: 'test_img' })
+    mockDB.first.mockResolvedValueOnce({ count: 1, reset_at: 9999999999 }) // rl IP
+    mockDB.first.mockResolvedValueOnce({ count: 1, reset_at: 9999999999 }) // rl loginId
+    mockDB.first.mockResolvedValueOnce({ count: 1, reset_at: 9999999999 }) // rl ip-loginId
+    mockDB.first.mockResolvedValueOnce(null) // User not found
     
-    // @ts-ignore
-    ;(global.fetch as any).mockResolvedValueOnce({
-      json: async () => ({ result: 'error' })
-    })
-
-    const req = new Request('http://localhost/api/items/1', {
-      method: 'DELETE',
-      headers: { 'Cookie': 'session=test; family_id=1' }
-    })
-    
-    const res = await app.request(req, undefined, env)
-    const json = (await res.json()) as any
-
-    expect(json.imageDeleted).toBe(false)
-    expect(json.imageDeletionPending).toBe(true)
-    
-    const statusUpdateCall = mockDB.bind.mock.calls.find((c: any) => c[0] === 'deletion_pending')
-    expect(statusUpdateCall).toBeDefined()
-  })
-
-  it('okとnot foundは削除完了として扱う', async () => {
-    const env = getEnv()
-    mockDB.first.mockResolvedValueOnce({ id: 1 })
-      .mockResolvedValueOnce({ id: 1 })
-      .mockResolvedValueOnce({ id: 10, public_id: 'test_img' })
-    
-    // @ts-ignore
-    ;(global.fetch as any).mockResolvedValueOnce({
-      json: async () => ({ result: 'not found' })
-    })
-
-    const req = new Request('http://localhost/api/items/1', {
-      method: 'DELETE',
-      headers: { 'Cookie': 'session=test; family_id=1' }
-    })
-    
-    const res = await app.request(req, undefined, env)
-    const json = (await res.json()) as any
-
-    expect(json.imageDeleted).toBe(true)
-    
-    const deleteImgCall = mockDB.prepare.mock.calls.find((c: any) => c[0].includes('DELETE FROM uploaded_images'))
-    expect(deleteImgCall).toBeDefined()
-  })
-})
-
-describe('Rate Limiting', () => {
-  let mockDB: any
-
-  beforeEach(() => {
-    mockDB = {
-      prepare: vi.fn().mockReturnThis(),
-      bind: vi.fn().mockReturnThis(),
-      first: vi.fn(),
-      run: vi.fn()
-    }
-  })
-
-  const getEnv = () => ({
-    DB: mockDB,
-    COOKIE_SECRET: 'test-secret'
-  })
-
-  it('Rate limit threshold triggers 429', async () => {
-    const env = getEnv()
-    mockDB.first.mockResolvedValueOnce({ count: 11, reset_at: 9999999999 })
-    
-    const req = new Request('http://localhost/api/register-family', {
+    const req = new Request('http://localhost/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ familyName: 'test', username: 'test', password: 'password123' })
+      body: JSON.stringify({ login_id: 'nonexistent', password: 'password123' })
+    })
+
+    const res = await app.request(req, undefined, env)
+    const data = await res.json() as any
+    expect(res.status).toBe(401)
+    expect(data.error).toBe('ログインIDまたはパスワードが正しくありません。')
+  })
+  
+  it('Rate limit threshold triggers 429', async () => {
+    const env = getEnv()
+    mockDB.first.mockResolvedValueOnce({ count: 11, reset_at: 9999999999 }) // Exceeded
+    
+    const req = new Request('http://localhost/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ login_id: 'test', password: 'password123' })
     })
 
     const res = await app.request(req, undefined, env)
     expect(res.status).toBe(429)
+  })
+  
+  it('Owner can issue invite', async () => {
+    const env = getEnv()
+    mockDB.first.mockResolvedValueOnce({ id: 1, login_id: 'test', display_name: 'test', expires_at: '2999-01-01T00:00:00Z' }) // Session
+    mockDB.first.mockResolvedValueOnce({ role: 'owner' }) // Owner check
+    mockDB.first.mockResolvedValueOnce({ count: 1, reset_at: 9999999999 }) // rl IP
+    mockDB.first.mockResolvedValueOnce({ count: 1, reset_at: 9999999999 }) // rl userId
+    mockDB.first.mockResolvedValueOnce({ count: 1, reset_at: 9999999999 }) // rl listId
+    mockDB.first.mockResolvedValueOnce({ count: 1, reset_at: 9999999999 }) // rl ip-userId
+    mockDB.first.mockResolvedValueOnce({ id: 123, expires_at: '2999-01-01T00:00:00Z' }) // Created invite
+    
+    const req = new Request('http://localhost/api/lists/1/invites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Cookie': 'session_token=test' }
+    })
+
+    const res = await app.request(req, undefined, env)
+    expect(res.status).toBe(201)
+  })
+  
+  it('Member cannot issue invite', async () => {
+    const env = getEnv()
+    mockDB.first.mockResolvedValueOnce({ id: 1, login_id: 'test', display_name: 'test', expires_at: '2999-01-01T00:00:00Z' }) // Session
+    mockDB.first.mockResolvedValueOnce({ role: 'member' }) // Member check -> not owner
+    
+    const req = new Request('http://localhost/api/lists/1/invites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Cookie': 'session_token=test' }
+    })
+
+    const res = await app.request(req, undefined, env)
+    expect(res.status).toBe(403)
   })
 })

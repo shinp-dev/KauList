@@ -1,3 +1,12 @@
+-- Migration: Rebuild to Shared Shopper schema (Destructive)
+-- This migration drops existing tables and creates the new shared lists schema.
+
+DROP TABLE IF EXISTS rate_limits;
+DROP TABLE IF EXISTS uploaded_images;
+DROP TABLE IF EXISTS items;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS families;
+
 -- 1. users
 CREATE TABLE users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,7 +102,7 @@ CREATE TABLE uploaded_images (
 );
 CREATE UNIQUE INDEX idx_uploaded_images_item ON uploaded_images(item_id) WHERE item_id IS NOT NULL;
 
--- 8. rate_limits
+-- 8. rate_limits (Same structure, recreated for completeness)
 CREATE TABLE rate_limits (
   key TEXT PRIMARY KEY,
   count INTEGER DEFAULT 1,

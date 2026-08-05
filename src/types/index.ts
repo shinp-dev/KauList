@@ -3,6 +3,7 @@ export type Bindings = {
   CLOUD_NAME: string
   CLOUDINARY_API_KEY?: string
   CLOUDINARY_API_SECRET?: string
+  ENVIRONMENT?: string
 }
 
 export type Variables = {
@@ -22,6 +23,15 @@ export interface User {
   password_hash: string
   created_at: string
   updated_at: string
+}
+
+export interface Session {
+  id: number
+  token_hash: string
+  user_id: number
+  expires_at: string
+  created_at: string
+  last_seen_at: string | null
 }
 
 export interface ShoppingList {

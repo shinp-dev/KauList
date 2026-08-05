@@ -108,6 +108,7 @@ export const Layout = (props: { title: string, children?: any, user?: any, lists
             `)}
           </select>
         ` : ''}
+        <button id="btn-create-list-dialog" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">＋ 新規リスト</button>
       </div>
       <div class="header-right">
         <span>${props.user.display_name}</span>
@@ -119,6 +120,20 @@ export const Layout = (props: { title: string, children?: any, user?: any, lists
   <main class="main-container">
     ${props.children}
   </main>
+  
+  <dialog id="create-list-dialog" style="border: none; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 1.5rem; max-width: 400px; width: 100%;">
+    <h3 style="margin-top: 0;">新規リスト作成</h3>
+    <form id="create-list-form" style="display: flex; flex-direction: column; gap: 1rem;">
+      <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+        <label for="new-list-name">リスト名</label>
+        <input type="text" id="new-list-name" required maxlength="50" />
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem;">
+        <button type="button" id="btn-close-create-list">キャンセル</button>
+        <button type="submit" class="btn-primary">作成</button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>`
 }

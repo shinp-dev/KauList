@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Dialogs
   const shareDialog = document.getElementById('share-dialog')
   const membersDialog = document.getElementById('members-dialog')
+  const createListDialog = document.getElementById('create-list-dialog')
   
   if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
@@ -62,6 +63,35 @@ document.addEventListener('DOMContentLoaded', () => {
     logoutBtn.addEventListener('click', async () => {
       await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
       window.location.href = '/login'
+    })
+  }
+
+  // Create List UI
+  const btnCreateList = document.getElementById('btn-create-list-dialog')
+  const createListForm = document.getElementById('create-list-form')
+  if (btnCreateList && createListDialog) {
+    btnCreateList.addEventListener('click', () => {
+      createListDialog.showModal()
+    })
+    document.getElementById('btn-close-create-list').addEventListener('click', () => {
+      createListDialog.close()
+    })
+  }
+  if (createListForm) {
+    createListForm.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const name = document.getElementById('new-list-name').value
+      const res = await fetch('/api/lists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      })
+      const json = await res.json()
+      if (json.success) {
+        window.location.href = '/lists/' + json.list.id
+      } else {
+        alert(json.error)
+      }
     })
   }
 
@@ -249,7 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await fetch(`/api/lists/${listId}/invites`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
         const json = await res.json()
         if (json.success) {
-          const url = `${window.location.origin}/join?code=${json.invite.token}`
+          const url = `${window.location.origin}/join?code=${json.token}`
           document.getElementById('invite-url').value = url
           shareDialog.showModal()
         } else {
@@ -311,6 +341,65 @@ document.addEventListener('DOMContentLoaded', () => {
       })
       
       document.getElementById('btn-close-members').addEventListener('click', () => membersDialog.close())
+    }
+
+    // Rename List
+    const btnRenameList = document.getElementById('btn-rename-list')
+    if (btnRenameList) {
+      btnRenameList.addEventListener('click', async () => {
+        const newName = prompt('新しいリスト名を入力してください:')
+        if (newName && newName.trim()) {
+          const res = await fetch(`/api/lists/${listId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newName.trim() })
+          })
+          const json = await res.json()
+          if (json.success) {
+            window.location.reload()
+          } else {
+            alert(json.error)
+          }
+        }
+      })
+    }
+
+    // Delete List
+    const btnDeleteList = document.getElementById('btn-delete-list')
+    if (btnDeleteList) {
+      btnDeleteList.addEventListener('click', async () => {
+        if (confirm('本当にこのリストを削除しますか？\n(※この操作は取り消せません)')) {
+          const res = await fetch(`/api/lists/${listId}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+          })
+          const json = await res.json()
+          if (json.success) {
+            window.location.href = '/'
+          } else {
+            alert(json.error)
+          }
+        }
+      })
+    }
+
+    // Leave List
+    const btnLeaveList = document.getElementById('btn-leave-list')
+    if (btnLeaveList) {
+      btnLeaveList.addEventListener('click', async () => {
+        if (confirm('本当にこのリストから退出しますか？')) {
+          const res = await fetch(`/api/lists/${listId}/leave`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+          })
+          const json = await res.json()
+          if (json.success) {
+            window.location.href = '/'
+          } else {
+            alert(json.error)
+          }
+        }
+      })
     }
 
     // Initial load

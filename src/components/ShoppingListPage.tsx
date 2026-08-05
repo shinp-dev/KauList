@@ -25,11 +25,15 @@ export const ShoppingListPage = (props: {
       <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
         <h1 style="margin: 0;">{props.currentList.name}</h1>
         <div style="display: flex; gap: 0.5rem;">
-          {props.role === 'owner' && (
-            <button id="btn-share" class="btn-primary">共有する</button>
-          )}
-          {props.role === 'owner' && (
-            <button id="btn-members">メンバー管理</button>
+          {props.role === 'owner' ? (
+            <>
+              <button id="btn-rename-list">名前変更</button>
+              <button id="btn-share" class="btn-primary">共有する</button>
+              <button id="btn-members">メンバー管理</button>
+              <button id="btn-delete-list" class="btn-danger">リスト削除</button>
+            </>
+          ) : (
+            <button id="btn-leave-list" class="btn-danger">リストから退出</button>
           )}
         </div>
       </div>

@@ -5,7 +5,7 @@ import type { Bindings, Variables } from './types'
 import { authRoutes } from './modules/auth/routes'
 import { listsRoutes } from './modules/lists/routes'
 import { membersRoutes } from './modules/members/routes'
-import { invitesRoutes, globalInvitesRoutes } from './modules/invites/routes'
+import { invitesRoutes, inviteAcceptRoutes } from './modules/invites/routes'
 import { itemsRoutes } from './modules/items/routes'
 import { imagesRoutes } from './modules/images/routes'
 import { ImageService } from './modules/images/service'
@@ -15,6 +15,7 @@ import { ListService } from './modules/lists/service'
 import { LoginPage, RegisterPage } from './components/AuthPages'
 import { ShoppingListPage } from './components/ShoppingListPage'
 import { JoinPage } from './components/JoinPage'
+import { Layout } from './components/Layout'
 
 const app = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 
@@ -62,8 +63,17 @@ app.get('/', async (c) => {
   if (lists.length > 0) {
     return c.redirect(`/lists/${lists[0].id}`)
   } else {
-    // If user has no lists (e.g. left all lists)
-    return c.html(<ShoppingListPage user={user} lists={[]} currentList={{id: 0, name: 'リストがありません'}} members={[]} role="member" cloudName={c.env.CLOUD_NAME} />)
+    // If user has no lists (e.g. left all lists), show a page prompting to create one
+    const EmptyListPage = () => (
+      <Layout title="ホーム" user={user} lists={[]}>
+        <div style="text-align: center; padding: 4rem 2rem;">
+          <h2>参加しているリストがありません</h2>
+          <p style="color: var(--text-light); margin-bottom: 2rem;">新しいリストを作成するか、招待リンクから参加してください。</p>
+          <button class="btn-primary" onclick="document.getElementById('create-list-dialog').showModal()">新しいリストを作成する</button>
+        </div>
+      </Layout>
+    )
+    return c.html(<EmptyListPage />)
   }
 })
 
@@ -82,12 +92,21 @@ app.get('/lists/:listId', async (c) => {
   if (!user) return c.redirect('/login')
 
   const listId = Number(c.req.param('listId'))
-  const member = await c.env.DB.prepare('SELECT role FROM list_members WHERE list_id = ? AND user_id = ?').bind(listId, user.id).first<{role: string}>()
+  
+  const member = await c.env.DB.prepare(`
+    SELECT lm.role 
+    FROM list_members lm 
+    JOIN shopping_lists sl ON lm.list_id = sl.id 
+    WHERE lm.list_id = ? AND lm.user_id = ? AND sl.deleted_at IS NULL
+  `).bind(listId, user.id).first<{role: string}>()
+  
   if (!member) return c.redirect('/') // Or 404
 
   const listService = new ListService(c.env.DB)
   const lists = await listService.getUserLists(user.id)
-  const currentList = await c.env.DB.prepare('SELECT * FROM shopping_lists WHERE id = ?').bind(listId).first()
+  const currentList = await listService.getListById(listId)
+  
+  if (!currentList) return c.redirect('/')
 
   return c.html(<ShoppingListPage 
     user={user} 
@@ -114,7 +133,7 @@ app.route('/api/auth', authRoutes)
 app.route('/api/lists', listsRoutes)
 app.route('/api/lists', membersRoutes)
 app.route('/api/lists', invitesRoutes)
-app.route('/api', globalInvitesRoutes) // /api/invites/accept
+app.route('/api', inviteAcceptRoutes) // /api/invites/accept
 app.route('/api/lists', itemsRoutes)
 app.route('/api/lists', imagesRoutes)
 

@@ -1,40 +1,50 @@
-import type { ShoppingList, ListMember } from '../../types'
+import type { ShoppingList } from '../../types'
+import { ListRepository } from './repository'
+import { MemberRepository } from '../members/repository'
 
 export class ListService {
-  constructor(private db: D1Database) {}
+  private listRepo: ListRepository
+  private memberRepo: MemberRepository
+
+  constructor(private db: D1Database) {
+    this.listRepo = new ListRepository(db)
+    this.memberRepo = new MemberRepository(db)
+  }
 
   async getUserLists(userId: number): Promise<ShoppingList[]> {
-    const { results } = await this.db.prepare(`
-      SELECT sl.* 
-      FROM shopping_lists sl
-      JOIN list_members lm ON sl.id = lm.list_id
-      WHERE lm.user_id = ?
-      ORDER BY sl.created_at DESC
-    `).bind(userId).all<ShoppingList>()
-    return results || []
+    return await this.listRepo.getUserLists(userId)
   }
 
-  async createList(userId: number, name: string): Promise<ShoppingList> {
-    const res = await this.db.prepare(
-      'INSERT INTO shopping_lists (name, created_by_user_id) VALUES (?, ?) RETURNING *'
-    ).bind(name, userId).first<ShoppingList>()
+  async createList(name: string, userId: number): Promise<ShoppingList> {
+    let list: ShoppingList | undefined
+
+    try {
+      list = await this.listRepo.createList(name, userId)
+      await this.memberRepo.addMember(list.id, userId, 'owner')
+      return list
+    } catch (e) {
+      if (list) {
+        try { await this.memberRepo.removeMember(list.id, userId) } catch (err) {}
+        try { await this.listRepo.deleteList(list.id) } catch (err) {}
+      }
+      throw e
+    }
+  }
+
+  async renameList(listId: number, name: string): Promise<void> {
+    await this.listRepo.updateListName(listId, name)
+  }
+
+  async softDeleteList(listId: number): Promise<void> {
+    const now = new Date().toISOString()
     
-    if (!res) throw new Error('Failed to create list')
-
+    // 論理削除
+    await this.listRepo.softDeleteList(listId, now)
+    
+    // 紐づく一時画像をすべて deletion_pending に変更
+    // (これは images repository を呼ぶか、直接更新するか。責務的に Repositoryを呼ぶべきだが)
     await this.db.prepare(
-      'INSERT INTO list_members (list_id, user_id, role) VALUES (?, ?, ?)'
-    ).bind(res.id, userId, 'owner').run()
-
-    return res
-  }
-
-  async updateList(listId: number, name: string): Promise<void> {
-    await this.db.prepare(
-      'UPDATE shopping_lists SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-    ).bind(name, listId).run()
-  }
-
-  async deleteList(listId: number): Promise<void> {
-    await this.db.prepare('DELETE FROM shopping_lists WHERE id = ?').bind(listId).run()
+      "UPDATE uploaded_images SET status = 'deletion_pending', updated_at = ? WHERE list_id = ? AND status IN ('reserved', 'temporary', 'attached')"
+    ).bind(now, listId).run()
   }
 }

@@ -2,19 +2,27 @@ import { Hono } from 'hono'
 import type { Bindings, Variables } from '../../types'
 import { requireAuth, requireListOwner } from '../../middleware/auth'
 import { InviteService } from './service'
-import { csrfProtection } from '../../middleware/csrf'
 import { checkRateLimit } from '../../lib/rateLimit'
+import { csrfProtection } from '../../middleware/csrf'
+import { hashToken } from '../../lib/crypto'
 
 const invitesRoutes = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 
 invitesRoutes.use('*', requireAuth)
+
+invitesRoutes.get('/:listId/invites', requireListOwner(), async (c) => {
+  const listId = Number(c.req.param('listId'))
+  const service = new InviteService(c.env.DB)
+  const invites = await service.getInvites(listId)
+  return c.json({ success: true, invites })
+})
 
 invitesRoutes.post('/:listId/invites', csrfProtection, requireListOwner(), async (c) => {
   const listId = Number(c.req.param('listId'))
   const user = c.get('user')!
 
   const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || '127.0.0.1'
-  const rl = await checkRateLimit(c, { action: 'invite-create', limit: 10, windowSeconds: 60 }, [
+  const rl = await checkRateLimit(c, { action: 'create-invite', limit: 10, windowSeconds: 3600 }, [
     { scope: 'userId', value: user.id.toString() },
     { scope: 'listId', value: listId.toString() },
     { scope: 'ip-userId', value: `${ip}:${user.id}` }
@@ -23,46 +31,48 @@ invitesRoutes.post('/:listId/invites', csrfProtection, requireListOwner(), async
 
   const service = new InviteService(c.env.DB)
   const { token, code } = await service.createInvite(listId, user.id)
-  
-  return c.json({ success: true, invite: { id: code.id, token, expires_at: code.expires_at } }, 201)
+
+  return c.json({ success: true, token, code }, 201)
 })
 
 invitesRoutes.delete('/:listId/invites/:inviteId', csrfProtection, requireListOwner(), async (c) => {
   const listId = Number(c.req.param('listId'))
   const inviteId = Number(c.req.param('inviteId'))
-  
+
   const service = new InviteService(c.env.DB)
   await service.revokeInvite(inviteId, listId)
-  
+
   return c.json({ success: true })
 })
 
-// Special global route for accepting invites, not under /:listId/
-const globalInvitesRoutes = new Hono<{ Bindings: Bindings, Variables: Variables }>()
-globalInvitesRoutes.use('*', requireAuth)
+// Accept invite
+const inviteAcceptRoutes = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 
-globalInvitesRoutes.post('/invites/accept', csrfProtection, async (c) => {
-  const user = c.get('user')!
+inviteAcceptRoutes.post('/invites/accept', csrfProtection, requireAuth, async (c) => {
   const body = await c.req.json()
-  const token = typeof body.token === 'string' ? body.token.trim() : ''
+  const token = body.token
 
-  if (!token) return c.json({ success: false, error: 'Token is required' }, 400)
+  if (!token || typeof token !== 'string') return c.json({ success: false, error: 'Invalid token' }, 400)
 
+  const user = c.get('user')!
   const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || '127.0.0.1'
-  const rl = await checkRateLimit(c, { action: 'invite-accept', limit: 10, windowSeconds: 60 }, [
-    { scope: 'ip', value: ip },
+
+  // Hash token for rate limit key
+  const tokenHash = await hashToken(token)
+
+  const rl = await checkRateLimit(c, { action: 'accept-invite', limit: 5, windowSeconds: 300 }, [
     { scope: 'userId', value: user.id.toString() },
-    { scope: 'token', value: token }
+    { scope: 'tokenHash', value: tokenHash }
   ])
   if (!rl.success) return c.json({ success: false, error: 'Too Many Requests' }, 429)
 
   const service = new InviteService(c.env.DB)
   try {
     const { listId } = await service.acceptInvite(user.id, token)
-    return c.json({ success: true, listId })
+    return c.json({ success: true, list_id: listId })
   } catch (err: any) {
-    return c.json({ success: false, error: err.message || 'Failed to accept invite' }, 400)
+    return c.json({ success: false, error: err.message }, 400)
   }
 })
 
-export { invitesRoutes, globalInvitesRoutes }
+export { invitesRoutes, inviteAcceptRoutes }

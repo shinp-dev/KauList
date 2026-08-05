@@ -1,43 +1,47 @@
-import type { Bindings, User, ShoppingList } from '../../types'
+import type { User, ShoppingList } from '../../types'
 import { hashPassword, verifyPassword, generateToken, hashToken } from '../../lib/crypto'
+import { AuthRepository } from './repository'
+import { ListRepository } from '../lists/repository'
+import { MemberRepository } from '../members/repository'
 
 export class AuthService {
-  constructor(private db: D1Database) {}
+  private authRepo: AuthRepository
+  private listRepo: ListRepository
+  private memberRepo: MemberRepository
+
+  constructor(private db: D1Database) {
+    this.authRepo = new AuthRepository(db)
+    this.listRepo = new ListRepository(db)
+    this.memberRepo = new MemberRepository(db)
+  }
 
   async registerUser(loginId: string, displayName: string, passwordHash: string): Promise<{ user: User, list: ShoppingList }> {
-    // We cannot use D1 transaction easily if it's not supported in this environment without specific flags,
-    // but D1 supports batched execution or manual transactions. We'll use batch.
-    
-    // Actually D1 doesn't return auto-increment IDs easily from batch.
-    // We'll execute them sequentially, but handle rollback manually if needed, or rely on them succeeding.
-    
-    const userRes = await this.db.prepare(
-      'INSERT INTO users (login_id, display_name, password_hash) VALUES (?, ?, ?) RETURNING *'
-    ).bind(loginId, displayName, passwordHash).first<User>()
-
-    if (!userRes) throw new Error('Failed to create user')
+    let user: User | undefined
+    let list: ShoppingList | undefined
 
     try {
-      const listRes = await this.db.prepare(
-        'INSERT INTO shopping_lists (name, created_by_user_id) VALUES (?, ?) RETURNING *'
-      ).bind('買い物リスト', userRes.id).first<ShoppingList>()
+      user = await this.authRepo.createUser(loginId, displayName, passwordHash)
+      
+      list = await this.listRepo.createList('買い物リスト', user.id)
+      
+      await this.memberRepo.addMember(list.id, user.id, 'owner')
 
-      if (!listRes) throw new Error('Failed to create default list')
-
-      await this.db.prepare(
-        'INSERT INTO list_members (list_id, user_id, role) VALUES (?, ?, ?)'
-      ).bind(listRes.id, userRes.id, 'owner').run()
-
-      return { user: userRes, list: listRes }
+      return { user, list }
     } catch (e) {
-      // Manual rollback
-      await this.db.prepare('DELETE FROM users WHERE id = ?').bind(userRes.id).run()
+      // Reverse compensation
+      if (list) {
+        try { await this.memberRepo.removeMember(list.id, user!.id) } catch (err) {}
+        try { await this.listRepo.deleteList(list.id) } catch (err) {}
+      }
+      if (user) {
+        try { await this.authRepo.deleteUser(user.id) } catch (err) {}
+      }
       throw e
     }
   }
 
   async login(loginId: string, passwordText: string): Promise<User | null> {
-    const user = await this.db.prepare('SELECT * FROM users WHERE login_id = ? COLLATE NOCASE').bind(loginId).first<User>()
+    const user = await this.authRepo.getUserByLoginId(loginId)
     if (!user) return null
 
     const match = await verifyPassword(passwordText, user.password_hash)
@@ -51,15 +55,12 @@ export class AuthService {
     const tokenHash = await hashToken(token)
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
 
-    await this.db.prepare(
-      'INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)'
-    ).bind(tokenHash, userId, expiresAt.toISOString()).run()
-
+    await this.authRepo.createSession(userId, tokenHash, expiresAt.toISOString())
     return token
   }
 
   async revokeSession(token: string): Promise<void> {
     const tokenHash = await hashToken(token)
-    await this.db.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(tokenHash).run()
+    await this.authRepo.deleteSessionByHash(tokenHash)
   }
 }

@@ -8,7 +8,7 @@
     "lib": [
       "ESNext"
     ],
-    "types": ["vite/client", "@cloudflare/workers-types", "vitest/globals"],
+    "types": ["vite/client", "@cloudflare/workers-types", "vitest/globals", "node"],
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx"
   },

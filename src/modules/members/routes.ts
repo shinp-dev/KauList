@@ -1,34 +1,36 @@
 import { Hono } from 'hono'
-import type { Bindings, Variables, User } from '../../types'
-import { requireAuth, requireListMember, requireListOwner } from '../../middleware/auth'
+import type { Bindings, Variables } from '../../types'
+import { requireAuth, requireListOwner, requireListMember } from '../../middleware/auth'
 import { csrfProtection } from '../../middleware/csrf'
+import { MemberRepository } from './repository'
 
 const membersRoutes = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 
 membersRoutes.use('*', requireAuth)
 
-membersRoutes.get('/:listId/members', requireListOwner(), async (c) => {
+membersRoutes.get('/:listId/members', requireListMember(), async (c) => {
   const listId = Number(c.req.param('listId'))
-  const { results } = await c.env.DB.prepare(`
-    SELECT u.id, u.login_id, u.display_name, lm.role, lm.joined_at
-    FROM list_members lm
-    JOIN users u ON lm.user_id = u.id
-    WHERE lm.list_id = ?
-    ORDER BY lm.joined_at ASC
-  `).bind(listId).all()
-  return c.json({ success: true, members: results || [] })
+  const repo = new MemberRepository(c.env.DB)
+  const members = await repo.getMembers(listId)
+  return c.json({ success: true, members })
 })
 
 membersRoutes.delete('/:listId/members/:userId', csrfProtection, requireListOwner(), async (c) => {
   const listId = Number(c.req.param('listId'))
   const targetUserId = Number(c.req.param('userId'))
-  const currentUser = c.get('user')!
+  const user = c.get('user')!
 
-  if (targetUserId === currentUser.id) {
+  if (targetUserId === user.id) {
     return c.json({ success: false, error: 'Cannot remove yourself' }, 400)
   }
 
-  await c.env.DB.prepare('DELETE FROM list_members WHERE list_id = ? AND user_id = ?').bind(listId, targetUserId).run()
+  const repo = new MemberRepository(c.env.DB)
+  const member = await repo.getMember(listId, targetUserId)
+  if (!member) {
+    return c.json({ success: false, error: 'Member not found' }, 404)
+  }
+
+  await repo.removeMember(listId, targetUserId)
   return c.json({ success: true })
 })
 

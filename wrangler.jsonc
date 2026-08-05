@@ -8,7 +8,7 @@
 	],
 	"vars": {
 		"CLOUD_NAME": "denngbse",
-		"CLOUDINARY_API_KEY": "966431115465761",
+		"CLOUDINARY_API_KEY": "96643115465761",
 		"ENVIRONMENT": "production"
 	},
 	// "kv_namespaces": [

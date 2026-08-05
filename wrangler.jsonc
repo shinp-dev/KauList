@@ -7,7 +7,7 @@
 		"nodejs_compat"
 	],
 	"vars": {
-		"CLOUD_NAME": "denngbse",
+		"CLOUD_NAME": "dennngbse",
 		"CLOUDINARY_API_KEY": "963469414343284",
 		"ENVIRONMENT": "production"
 	},

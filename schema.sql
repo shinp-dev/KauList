@@ -4,6 +4,7 @@ DROP TABLE IF EXISTS items;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS families;
 DROP TABLE IF EXISTS rate_limits;
+DROP TABLE IF EXISTS uploaded_images;
 
 -- 1. families: ID and Name (Unique)
 CREATE TABLE families (
@@ -43,6 +44,20 @@ CREATE TABLE rate_limits (
   reset_at INTEGER NOT NULL
 );
 
+-- 5. uploaded_images
+CREATE TABLE uploaded_images (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  public_id TEXT UNIQUE NOT NULL,
+  secure_url TEXT NOT NULL,
+  family_id INTEGER NOT NULL,
+  uploaded_by_user_id INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'reserved',
+  item_id INTEGER,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (family_id) REFERENCES families(id),
+  FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE SET NULL
+);
+
 -- Initialize Default Family
 INSERT INTO families (id, name) VALUES (1, 'Default Family');
 
@@ -50,3 +65,5 @@ INSERT INTO families (id, name) VALUES (1, 'Default Family');
 CREATE INDEX IF NOT EXISTS idx_items_family_created ON items(family_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_users_family_id ON users(family_id);
 CREATE INDEX IF NOT EXISTS idx_rate_limits_reset ON rate_limits(reset_at);
+CREATE INDEX IF NOT EXISTS idx_uploaded_images_family ON uploaded_images(family_id);
+CREATE INDEX IF NOT EXISTS idx_uploaded_images_status_created ON uploaded_images(status, created_at);

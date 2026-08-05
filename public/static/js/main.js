@@ -2,11 +2,17 @@
   let items = [];
   let currentFilter = 'all';
   let imageUrl = '';
-  let currentPublicId = '';
+  let currentImageId = null;
   
-  // window.APP_CONFIG defined via inline script in HTML
-  const config = window.APP_CONFIG || { cloudName: '', uploadPreset: '', familyName: '', user: '' };
-  
+  let config = { cloudName: '', uploadPreset: '', familyName: '', user: '' };
+  try {
+    const configEl = document.getElementById('app-config');
+    if (configEl) {
+      config = JSON.parse(configEl.textContent || '{}');
+    }
+  } catch(e) {
+    console.error('Failed to load APP_CONFIG', e);
+  }
   // Safely construct user-specific LocalStorage key
   const safeFamily = config.familyName ? encodeURIComponent(config.familyName) : 'default';
   const safeUser = config.user ? encodeURIComponent(config.user) : 'guest';
@@ -83,43 +89,67 @@
         const file = e.target.files[0];
         if (!file) return;
 
-        // If there's an existing uploaded image that wasn't added to the list, delete it
-        if (currentPublicId) {
-          fetch('/api/images/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ public_id: currentPublicId })
-          }).catch(console.error);
-        }
-
-        uploadBtn.innerText = '⌛ アップロード中...';
+        uploadBtn.innerText = '⌛ 署名取得中...';
         uploadBtn.disabled = true;
         if (submitBtn) submitBtn.disabled = true;
 
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('upload_preset', config.uploadPreset);
-        
         try {
-          const res = await fetch(`https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`, {
+          // 1. Get signature
+          const sigRes = await fetch('/api/images/signature', { method: 'POST' });
+          const sigData = await sigRes.json();
+          if (!sigRes.ok || !sigData.signature) {
+             throw new Error('署名取得に失敗しました');
+          }
+
+          uploadBtn.innerText = '⌛ アップロード中...';
+          
+          // 2. Upload to Cloudinary
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('api_key', sigData.api_key);
+          formData.append('timestamp', sigData.timestamp);
+          formData.append('signature', sigData.signature);
+          formData.append('folder', sigData.folder);
+          formData.append('public_id', sigData.public_id);
+
+          const clRes = await fetch(`https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`, {
             method: 'POST',
             body: formData
           });
-          const data = await res.json();
-          if (data.secure_url) {
-            imageUrl = data.secure_url;
-            currentPublicId = data.public_id;
-            if (previewImg) previewImg.src = imageUrl;
-            if (previewDiv) previewDiv.style.display = 'block';
-            const hiddenInput = document.getElementById('item-image-url');
-            if (hiddenInput) hiddenInput.value = imageUrl;
-            uploadBtn.innerText = '✅ 完了 (変更するには再度タップ)';
-          } else {
-            alert('アップロードに失敗しました。');
-            uploadBtn.innerText = '📷 写真を撮る・選ぶ';
+          const clData = await clRes.json();
+          
+          if (!clData.secure_url) {
+            throw new Error('Cloudinaryアップロードエラー');
           }
+
+          uploadBtn.innerText = '⌛ サーバー登録中...';
+
+          // 3. Complete registration
+          const compRes = await fetch('/api/images/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              public_id: clData.public_id,
+              version: clData.version,
+              signature: clData.signature,
+              secure_url: clData.secure_url
+            })
+          });
+          const compData = await compRes.json();
+
+          if (!compData.success) {
+            throw new Error('サーバー登録エラー');
+          }
+
+          imageUrl = clData.secure_url;
+          currentImageId = compData.image_id;
+          if (previewImg) previewImg.src = imageUrl;
+          if (previewDiv) previewDiv.style.display = 'block';
+          uploadBtn.innerText = '✅ 完了 (変更するには再度タップ)';
+          
         } catch (err) {
-          alert('通信エラーが発生しました。');
+          console.error(err);
+          alert('画像のアップロードに失敗しました。');
           uploadBtn.innerText = '📷 写真を撮る・選ぶ';
         } finally {
           uploadBtn.disabled = false;
@@ -134,12 +164,11 @@
       const count = parseInt(document.getElementById('item-count').value);
       const unit = document.getElementById('item-unit').value;
       const category = document.getElementById('item-category').value;
-      const image_url = document.getElementById('item-image-url').value;
       
       const res = await fetch('/api/items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, count, unit, category, image_url })
+        body: JSON.stringify({ name, count, unit, category, image_id: currentImageId })
       });
       
       if (res.ok) {
@@ -155,7 +184,7 @@
         form.reset();
         if (previewDiv) previewDiv.style.display = 'none';
         imageUrl = '';
-        currentPublicId = '';
+        currentImageId = null;
         if (uploadBtn) uploadBtn.innerText = '📷 写真を撮る・選ぶ';
         await fetchItems();
       } else {

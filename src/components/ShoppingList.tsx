@@ -76,14 +76,19 @@ export const ShoppingList = ({ familyName, user, role, cloudName, uploadPreset }
       &copy; 2026-03-16 matsutani shinpei. All Rights Reserved.
     </div>
 
-    <script dangerouslySetInnerHTML={{ __html: `
-      window.APP_CONFIG = {
-        cloudName: '${cloudName}',
-        uploadPreset: '${uploadPreset}',
-        familyName: '${familyName}',
-        user: '${user}'
-      };
-    ` }} />
+    <script id="app-config" type="application/json" dangerouslySetInnerHTML={{
+      __html: JSON.stringify({
+        cloudName,
+        uploadPreset,
+        familyName,
+        user
+      })
+      .replace(/</g, '\\u003c')
+      .replace(/>/g, '\\u003e')
+      .replace(/&/g, '\\u0026')
+      .replace(/\u2028/g, '\\u2028')
+      .replace(/\u2029/g, '\\u2029')
+    }} />
     <script src="/static/js/main.js"></script>
   </>
 )

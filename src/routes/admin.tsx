@@ -49,7 +49,20 @@ admin.get('/api/admin/users', async (c) => {
 })
 
 admin.post('/api/admin/users', async (c) => {
-  const rl = await checkRateLimit(c, { action: 'admin-add-user', limit: 10, windowSeconds: 60 })
+  let secret: string
+  try {
+    secret = getCookieSecret(c)
+  } catch (e) {
+    return c.json({ success: false, error: 'サーバー設定エラーが発生しました。' }, 500)
+  }
+
+  const session = await getSignedCookie(c, secret, 'session') || 'unknown'
+  const familyId = c.get('family_id')
+
+  const rl = await checkRateLimit(c, { action: 'admin-add-user', limit: 10, windowSeconds: 60 }, [
+    `family:${familyId}`,
+    `admin:${session}`
+  ])
   if (!rl.success) {
     return c.json({ success: false, error: 'リクエストが多すぎます。しばらく時間をおいてから再度お試しください。' }, 429)
   }
@@ -66,7 +79,6 @@ admin.post('/api/admin/users', async (c) => {
     return c.json({ success: false, error: 'パスワードは8文字以上で指定してください。' }, 400)
   }
 
-  const familyId = c.get('family_id')
   const hashed = await hashPassword(password)
   
   try {

@@ -11,18 +11,24 @@ const auth = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 auth.get('/login', (c) => c.render(<LoginForm />))
 
 auth.post('/api/login', async (c) => {
+  const body = await c.req.json()
+  const familyName = typeof body.familyName === 'string' ? body.familyName.trim() : ''
+  const username = typeof body.username === 'string' ? body.username.trim() : ''
+  const password = typeof body.password === 'string' ? body.password : ''
+
   // Rate limit check
-  const rl = await checkRateLimit(c, { action: 'login', limit: 10, windowSeconds: 60 })
+  const rl = await checkRateLimit(c, { action: 'login', limit: 10, windowSeconds: 60 }, [
+    `${familyName}:${username}`,
+    `ip:${familyName}:${username}`
+  ])
   if (!rl.success) {
     return c.json({ success: false, error: 'リクエストが多すぎます。しばらく時間をおいてから再度お試しください。' }, 429)
   }
 
-  const { familyName, username, password } = await c.req.json()
-  
-  if (!username || typeof username !== 'string' || username.trim() === '') {
+  if (!username) {
     return c.json({ success: false, error: 'ユーザー名は必須です。' }, 400)
   }
-  if (!password || typeof password !== 'string' || password.trim() === '') {
+  if (!password) {
     return c.json({ success: false, error: 'パスワードは必須です。' }, 400)
   }
 
@@ -80,27 +86,33 @@ auth.post('/api/login', async (c) => {
 
 auth.post('/api/register-family', async (c) => {
   try {
+    const body = await c.req.json()
+    const familyName = typeof body.familyName === 'string' ? body.familyName.trim() : ''
+    const username = typeof body.username === 'string' ? body.username.trim() : ''
+    const password = typeof body.password === 'string' ? body.password : ''
+
     // Rate limit check
-    const rl = await checkRateLimit(c, { action: 'register-family', limit: 5, windowSeconds: 60 })
+    const rl = await checkRateLimit(c, { action: 'register-family', limit: 5, windowSeconds: 60 }, [
+      `${familyName}:${username}`,
+      `ip:${familyName}:${username}`
+    ])
     if (!rl.success) {
       return c.json({ success: false, error: 'リクエストが多すぎます。しばらく時間をおいてから再度お試しください。' }, 429)
     }
 
-    const { familyName, username, password } = await c.req.json()
-    
-    if (!familyName || typeof familyName !== 'string' || familyName.trim() === '') {
+    if (!familyName) {
       return c.json({ success: false, error: '家族名は必須項目です。' }, 400)
     }
     if (familyName.length > 50) {
       return c.json({ success: false, error: '家族名は50文字以内で入力してください。' }, 400)
     }
-    if (!username || typeof username !== 'string' || username.trim() === '') {
+    if (!username) {
       return c.json({ success: false, error: '管理者名は必須項目です。' }, 400)
     }
     if (username.length > 50) {
       return c.json({ success: false, error: '管理者名は50文字以内で入力してください。' }, 400)
     }
-    if (!password || typeof password !== 'string' || password.length < 8) {
+    if (!password || password.length < 8) {
       return c.json({ success: false, error: 'パスワードは8文字以上で指定してください。' }, 400)
     }
 

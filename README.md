@@ -7,16 +7,16 @@ Cloudflare Workers, D1 Database, および Cloudinary を活用した、モダ�
 
 ## ✨ 主な機能
 
-- **家族間でのリスト共有**: 家族で同じ買い物リストを共有し、追加や購入状態（完了チェック）を確認できます。
-- **写真付きアイテム管理**: Cloudinary 連携により、カメラで撮影した商品写真や画像を添えてリストへ追加。
+- **家族間でのリスト共有**: 家族で同じ買い物リストを共有し、追加や購入状態を確認できます。
+- **写真付きアイテム管理**: Cloudinaryの署名付きアップロード（Signed Upload）により、商品写真を追加できます。アップロードに失敗した一時画像や商品から削除された画像は、サーバー側で順次クリーンアップされます。
 - **拡大表示**: リストの画像サムネイルをタップすると、大画面で詳細を確認できます。
-- **家族メンバー管理**: 管理者が家族用のメンバーアカウント（8文字以上のパスワード）を自由に発行・管理。
+- **家族メンバー管理**: 管理者が家族用のメンバーアカウント（8文字以上のパスワード）を発行・管理できます。
 - **カテゴリフィルタ**: 「父用」「母用」「子ども用」「その他」（4種類固定）でリストを素早く絞り込み。
 - **入力補完**: 過去に入力した商品名を端末内で記憶し、候補表示（データリスト）をサポート。
-- **モバイル最適化**: スマホのカメラやギャラリーから直接アップロードできるレスポンシブな UI。
+- **モバイル対応**: スマホのカメラやギャラリーから直接アップロードできるUI。
 
 ### ⚠️ 機能に関する注記
-- **更新方式**: 画面の操作（追加・チェック切り替え・削除）や手動更新を行った際に最新状態を取得します（WebSocket や Push 通知等による自動リアルタイム通信には未対応です）。
+- **更新方式**: 画面の操作や手動更新を行った際に最新状態を取得します（自動リアルタイム通信には未対応です）。
 - **入力履歴**: 商品名の入力履歴は、サーバーではなくご利用の端末（LocalStorage）に保存されます。
 - **形態**: 本アプリは Web アプリケーションです（ネイティブアプリやオフライン利用、メール通知には対応していません）。
 
@@ -27,10 +27,11 @@ Cloudflare Workers, D1 Database, および Cloudinary を活用した、モダ�
 | データ種別 | 保存先 / 方式 | 説明 |
 | :--- | :--- | :--- |
 | **商品・家族・ユーザー情報** | **Cloudflare D1** | SQLite 互換のリレーショナルデータベース |
-| **商品写真** | **Cloudinary** | クラウドストレージ |
+| **商品写真** | **Cloudinary** | クラウドストレージ（`uploaded_images` テーブルで所有権を厳格に管理） |
 | **商品名入力履歴** | **LocalStorage** | ご利用端末のブラウザ内（`familyName` と `username` ごとに分離） |
 | **パスワード** | **PBKDF2-SHA256** | 100,000 回のソルト付きハッシュ化 |
 | **ログイン状態** | **署名付き Cookie** | `COOKIE_SECRET` で署名された HttpOnly / Secure / SameSite Cookie |
+| **APIアクセス制限** | **Cloudflare D1** | 簡易的なレート制限（本格的なWAFの代替ではありません。DB障害時はフェイルオープンします） |
 
 ---
 
@@ -56,23 +57,30 @@ Cloudflare のダッシュボードまたは `wrangler` にて、以下の環境
 | `ADMIN_USER` | **必須** | 初回システム管理者のログインユーザー名 |
 | `ADMIN_PASS` | **必須** | 初回システム管理者のログインパスワード（8文字以上推奨） |
 | `CLOUD_NAME` | **必須** | Cloudinary の Cloud Name |
-| `UPLOAD_PRESET` | **必須** | Cloudinary の Unsigned Upload Preset |
-| `CLOUDINARY_API_KEY` | **必須** | Cloudinary の API Key (画像削除用) |
-| `CLOUDINARY_API_SECRET` | **必須** | Cloudinary の API Secret (画像削除用) |
+| `UPLOAD_PRESET` | **必須** | Cloudinary の Upload Preset (旧互換用、現状のAPIでは署名付きアップロードを優先します) |
+| `CLOUDINARY_API_KEY` | **必須** | Cloudinary の API Key (署名・画像削除用) |
+| `CLOUDINARY_API_SECRET` | **必須** | Cloudinary の API Secret (署名・画像削除用) |
 
 ---
 
-### 2. データベースの初期化・セットアップ
+### 2. データベースの構築・マイグレーション
 
-> [!CAUTION]
-> `schema_refactor.sql` はテーブルの再作成（`DROP TABLE IF EXISTS`）を含みます。**既存のデータを初期化**しますので実行時はご注意ください。
-
+**【新規構築の場合】**
+`schema.sql` はテーブルを初期から作成するためのファイルです（`DROP TABLE`等の破壊的処理を含みます。既存データがある環境には実行しないでください）。
 ```bash
-# ローカル環境のD1データベース作成・適用
-npx wrangler d1 execute family-shopper-db --file=schema_refactor.sql --local
+# 新規ローカル環境のD1データベース作成
+npx wrangler d1 execute family-shopper-db --file=schema.sql --local
+```
 
-# リモート（本番）D1データベースへの反映
-npx wrangler d1 execute family-shopper-db --file=schema_refactor.sql --remote
+**【既存環境の更新（マイグレーション）の場合】**
+`migrations/` フォルダ内の非破壊マイグレーションSQLファイルを使用します。実行前に必ずデータのバックアップを推奨します。
+```bash
+# ローカルDBへのマイグレーション適用例（番号順に実行）
+npx wrangler d1 execute family-shopper-db --file=migrations/0001_add_rate_limits.sql --local
+npx wrangler d1 execute family-shopper-db --file=migrations/0002_add_uploaded_images.sql --local
+
+# 本番（リモート）DBへの適用例
+# npx wrangler d1 execute family-shopper-db --file=migrations/0001_add_rate_limits.sql --remote
 ```
 
 ---
@@ -101,11 +109,11 @@ npm run deploy
 2. **家族メンバーの追加**:
    - 管理者ページから、家族のユーザー名とパスワード（8文字以上）を登録します。
 3. **お買い物リストの作成**:
-   - メイン画面で欲しい商品を追加します。必要に応じて写真を撮っておくと、買い間違いを防止できます。
+   - メイン画面で欲しい商品を追加します。必要に応じて写真を撮っておくと便利です。
 4. **購入完了**:
    - お店で購入したら、リストのアイテムをタップして完了（チェック）にします。
 5. **削除**:
-   - 不要になったアイテムはゴミ箱アイコンで削除します（Cloudinary 上の画像も連動して削除されます）。
+   - 不要になったアイテムはゴミ箱アイコンで削除します（Cloudinary 上の画像も連動して削除を試みます。万が一削除に失敗した場合は、一定確率で再試行用レコードが処理されます）。
 
 ---
 

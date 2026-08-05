@@ -57,7 +57,6 @@ Cloudflare のダッシュボードまたは `wrangler` にて、以下の環境
 | `ADMIN_USER` | **必須** | 初回システム管理者のログインユーザー名 |
 | `ADMIN_PASS` | **必須** | 初回システム管理者のログインパスワード（8文字以上推奨） |
 | `CLOUD_NAME` | **必須** | Cloudinary の Cloud Name |
-| `UPLOAD_PRESET` | **必須** | Cloudinary の Upload Preset (旧互換用、現状のAPIでは署名付きアップロードを優先します) |
 | `CLOUDINARY_API_KEY` | **必須** | Cloudinary の API Key (署名・画像削除用) |
 | `CLOUDINARY_API_SECRET` | **必須** | Cloudinary の API Secret (署名・画像削除用) |
 
@@ -73,14 +72,16 @@ npx wrangler d1 execute family-shopper-db --file=schema.sql --local
 ```
 
 **【既存環境の更新（マイグレーション）の場合】**
-`migrations/` フォルダ内の非破壊マイグレーションSQLファイルを使用します。実行前に必ずデータのバックアップを推奨します。
+`migrations/` フォルダ内の非破壊マイグレーションSQLファイルを使用します。
+実行前に必ず `wrangler d1 export` コマンドでデータのバックアップを取得してください。
 ```bash
-# ローカルDBへのマイグレーション適用例（番号順に実行）
-npx wrangler d1 execute family-shopper-db --file=migrations/0001_add_rate_limits.sql --local
-npx wrangler d1 execute family-shopper-db --file=migrations/0002_add_uploaded_images.sql --local
+# 本番データベースのバックアップ取得
+npx wrangler d1 export family-shopper-db --remote --output=./backup.sql
 
-# 本番（リモート）DBへの適用例
-# npx wrangler d1 execute family-shopper-db --file=migrations/0001_add_rate_limits.sql --remote
+# 本番DBへのマイグレーション適用例（番号順にすべて実行してください）
+npx wrangler d1 execute family-shopper-db --file=migrations/0001_add_rate_limits.sql --remote
+npx wrangler d1 execute family-shopper-db --file=migrations/0002_add_uploaded_images.sql --remote
+npx wrangler d1 execute family-shopper-db --file=migrations/0003_harden_uploaded_images.sql --remote
 ```
 
 ---

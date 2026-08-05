@@ -60,8 +60,8 @@ admin.post('/api/admin/users', async (c) => {
   const familyId = c.get('family_id')
 
   const rl = await checkRateLimit(c, { action: 'admin-add-user', limit: 10, windowSeconds: 60 }, [
-    `family:${familyId}`,
-    `admin:${session}`
+    { scope: 'family', value: familyId.toString() },
+    { scope: 'admin', value: session }
   ])
   if (!rl.success) {
     return c.json({ success: false, error: 'リクエストが多すぎます。しばらく時間をおいてから再度お試しください。' }, 429)

@@ -1,4 +1,4 @@
-export const ShoppingList = ({ familyName, user, role, cloudName, uploadPreset }: { familyName: string, user: string, role: string, cloudName: string, uploadPreset: string }) => (
+export const ShoppingList = ({ familyName, user, role, cloudName }: { familyName: string, user: string, role: string, cloudName: string }) => (
   <>
     <div class="user-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: white; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
       <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
@@ -79,7 +79,6 @@ export const ShoppingList = ({ familyName, user, role, cloudName, uploadPreset }
     <script id="app-config" type="application/json" dangerouslySetInnerHTML={{
       __html: JSON.stringify({
         cloudName,
-        uploadPreset,
         familyName,
         user
       })

@@ -16,10 +16,10 @@ auth.post('/api/login', async (c) => {
   const username = typeof body.username === 'string' ? body.username.trim() : ''
   const password = typeof body.password === 'string' ? body.password : ''
 
-  // Rate limit check
+  const ip = c.req.header('x-real-ip') || c.req.header('x-forwarded-for') || 'unknown'
   const rl = await checkRateLimit(c, { action: 'login', limit: 10, windowSeconds: 60 }, [
-    `${familyName}:${username}`,
-    `ip:${familyName}:${username}`
+    { scope: 'account', value: `${familyName}:${username}` },
+    { scope: 'ip-account', value: `${ip}:${familyName}:${username}` }
   ])
   if (!rl.success) {
     return c.json({ success: false, error: 'リクエストが多すぎます。しばらく時間をおいてから再度お試しください。' }, 429)
@@ -91,10 +91,10 @@ auth.post('/api/register-family', async (c) => {
     const username = typeof body.username === 'string' ? body.username.trim() : ''
     const password = typeof body.password === 'string' ? body.password : ''
 
-    // Rate limit check
+    const ip = c.req.header('x-real-ip') || c.req.header('x-forwarded-for') || 'unknown'
     const rl = await checkRateLimit(c, { action: 'register-family', limit: 5, windowSeconds: 60 }, [
-      `${familyName}:${username}`,
-      `ip:${familyName}:${username}`
+      { scope: 'account', value: `${familyName}:${username}` },
+      { scope: 'ip-account', value: `${ip}:${familyName}:${username}` }
     ])
     if (!rl.success) {
       return c.json({ success: false, error: 'リクエストが多すぎます。しばらく時間をおいてから再度お試しください。' }, 429)

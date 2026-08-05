@@ -4,7 +4,7 @@
   let imageUrl = '';
   let currentImageId = null;
   
-  let config = { cloudName: '', uploadPreset: '', familyName: '', user: '' };
+  let config = { cloudName: '', familyName: '', user: '' };
   try {
     const configEl = document.getElementById('app-config');
     if (configEl) {
@@ -94,6 +94,13 @@
         if (submitBtn) submitBtn.disabled = true;
 
         try {
+          // If there is already a temporary image, delete it before uploading a new one
+          if (currentImageId) {
+            await fetch(`/api/images/${currentImageId}`, { method: 'DELETE' }).catch(console.error);
+            currentImageId = null;
+            imageUrl = '';
+          }
+
           // 1. Get signature
           const sigRes = await fetch('/api/images/signature', { method: 'POST' });
           const sigData = await sigRes.json();
@@ -131,8 +138,7 @@
             body: JSON.stringify({
               public_id: clData.public_id,
               version: clData.version,
-              signature: clData.signature,
-              secure_url: clData.secure_url
+              signature: clData.signature
             })
           });
           const compData = await compRes.json();

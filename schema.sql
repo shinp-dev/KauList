@@ -50,12 +50,17 @@ CREATE TABLE uploaded_images (
   public_id TEXT UNIQUE NOT NULL,
   secure_url TEXT NOT NULL,
   family_id INTEGER NOT NULL,
-  uploaded_by_user_id INTEGER NOT NULL,
+  uploaded_by_user_id INTEGER,
   status TEXT NOT NULL DEFAULT 'reserved',
   item_id INTEGER,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  retry_count INTEGER DEFAULT 0,
+  next_retry_at DATETIME,
+  last_error TEXT,
   FOREIGN KEY (family_id) REFERENCES families(id),
-  FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE SET NULL
+  FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE SET NULL,
+  FOREIGN KEY (uploaded_by_user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 -- Initialize Default Family
@@ -67,3 +72,4 @@ CREATE INDEX IF NOT EXISTS idx_users_family_id ON users(family_id);
 CREATE INDEX IF NOT EXISTS idx_rate_limits_reset ON rate_limits(reset_at);
 CREATE INDEX IF NOT EXISTS idx_uploaded_images_family ON uploaded_images(family_id);
 CREATE INDEX IF NOT EXISTS idx_uploaded_images_status_created ON uploaded_images(status, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_uploaded_images_item_unique ON uploaded_images(item_id) WHERE item_id IS NOT NULL;

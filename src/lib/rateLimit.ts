@@ -17,7 +17,7 @@ async function sha256(message: string): Promise<string> {
 export async function checkRateLimit(
   c: Context<{ Bindings: Bindings, Variables: any }>,
   options: RateLimitOptions,
-  extraKeys: string[] = [] // Example: ['familyName:user', 'ip:familyName:user']
+  extraKeys: Array<{scope: string, value: string} | string> = []
 ): Promise<{ success: boolean }> {
   try {
     const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || '127.0.0.1'
@@ -26,7 +26,7 @@ export async function checkRateLimit(
 
     // Clean up expired records sporadically (10% chance, max 5 records)
     if (Math.random() < 0.1) {
-      const cleanup = c.env.DB.prepare('DELETE FROM rate_limits WHERE reset_at <= ? LIMIT 5').bind(now).run().catch((e: any) => console.warn('Rate limit cleanup failed', e))
+      const cleanup = c.env.DB.prepare('DELETE FROM rate_limits WHERE key IN (SELECT key FROM rate_limits WHERE reset_at <= ? LIMIT 5)').bind(now).run().catch((e: any) => console.warn('Rate limit cleanup failed', e))
       try {
         if (c.executionCtx && typeof c.executionCtx.waitUntil === 'function') {
           c.executionCtx.waitUntil(cleanup)
@@ -38,7 +38,11 @@ export async function checkRateLimit(
       }
     }
 
-    const keysToVerify = [ip, ...extraKeys]
+    const keysToVerify = [ip]
+    for (const k of extraKeys) {
+      if (typeof k === 'string') keysToVerify.push(k)
+      else keysToVerify.push(`${k.scope}:${k.value}`)
+    }
     
     // Process each key independently
     for (const rawKey of keysToVerify) {

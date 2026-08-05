@@ -16,16 +16,20 @@ async function getUserId(c: import('hono').Context<{ Bindings: Bindings, Variabl
 
 async function cleanupImages(c: import('hono').Context<{ Bindings: Bindings, Variables: Variables }>, familyId: number) {
   const now = new Date()
-  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
+  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000).toISOString()
+  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
   
-  // Cleanup temporary images older than 24h
-  const toDelete = await c.env.DB.prepare(`
-    SELECT id, public_id FROM uploaded_images 
-    WHERE status IN ('temporary', 'deletion_pending') AND created_at < ? LIMIT 5
-  `).bind(yesterday).all<{id: number, public_id: string}>()
+  // Cleanup targets
+  const toClean = await c.env.DB.prepare(`
+    SELECT id, public_id, status, retry_count FROM uploaded_images 
+    WHERE (status = 'reserved' AND created_at < ?)
+       OR (status = 'temporary' AND created_at < ? AND item_id IS NULL)
+       OR (status = 'deletion_pending' AND (next_retry_at IS NULL OR next_retry_at <= ?))
+    LIMIT 10
+  `).bind(oneHourAgo, oneDayAgo, now.toISOString()).all<{id: number, public_id: string, status: string, retry_count: number}>()
 
-  if (toDelete.results && toDelete.results.length > 0) {
-    for (const img of toDelete.results) {
+  if (toClean.results && toClean.results.length > 0) {
+    for (const img of toClean.results) {
       if (c.env.CLOUDINARY_API_KEY && c.env.CLOUDINARY_API_SECRET) {
         const timestamp = Math.round(new Date().getTime() / 1000)
         const str = `public_id=${img.public_id}&timestamp=${timestamp}${c.env.CLOUDINARY_API_SECRET}`
@@ -38,13 +42,20 @@ async function cleanupImages(c: import('hono').Context<{ Bindings: Bindings, Var
             body: JSON.stringify({ public_id: img.public_id, timestamp, api_key: c.env.CLOUDINARY_API_KEY, signature })
           })
           const data = await res.json<CloudinaryResponse>()
+          
           if (data.result === 'ok' || data.result === 'not found') {
             await c.env.DB.prepare('DELETE FROM uploaded_images WHERE id = ?').bind(img.id).run()
           } else {
-             await c.env.DB.prepare('UPDATE uploaded_images SET status = ? WHERE id = ?').bind('deletion_pending', img.id).run()
+            const nextRetry = new Date(now.getTime() + Math.pow(2, img.retry_count) * 60 * 60 * 1000).toISOString()
+            await c.env.DB.prepare(
+              'UPDATE uploaded_images SET status = ?, retry_count = retry_count + 1, next_retry_at = ?, last_error = ?, updated_at = ? WHERE id = ?'
+            ).bind('deletion_pending', nextRetry, data.result, now.toISOString(), img.id).run()
           }
-        } catch (e) {
-           await c.env.DB.prepare('UPDATE uploaded_images SET status = ? WHERE id = ?').bind('deletion_pending', img.id).run()
+        } catch (e: any) {
+          const nextRetry = new Date(now.getTime() + Math.pow(2, img.retry_count) * 60 * 60 * 1000).toISOString()
+          await c.env.DB.prepare(
+            'UPDATE uploaded_images SET status = ?, retry_count = retry_count + 1, next_retry_at = ?, last_error = ?, updated_at = ? WHERE id = ?'
+          ).bind('deletion_pending', nextRetry, e.message || 'fetch_error', now.toISOString(), img.id).run()
         }
       }
     }
@@ -75,7 +86,6 @@ items.get('/', async (c) => {
       user={user} 
       role={role} 
       cloudName={c.env.CLOUD_NAME} 
-      uploadPreset={c.env.UPLOAD_PRESET} 
     />
   )
 })
@@ -101,17 +111,28 @@ items.get('/api/items', async (c) => {
 })
 
 items.post('/api/images/signature', async (c) => {
-  const rl = await checkRateLimit(c, { action: 'image-sig', limit: 20, windowSeconds: 60 })
-  if (!rl.success) return c.json({ success: false, error: 'Rate limit exceeded' }, 429)
-
   const familyId = c.get('family_id')
   const secret = getCookieSecret(c)
   const username = (await getSignedCookie(c, secret, 'session')) || ''
   const userId = await getUserId(c, username, familyId)
   
+  if (!userId) {
+    return c.json({ success: false, error: 'User not found' }, 403)
+  }
+
+  // Use ip+account for rate limiting
+  const ip = c.req.header('x-real-ip') || c.req.header('x-forwarded-for') || 'unknown'
+  const keys = [
+    { scope: 'ip', value: ip },
+    { scope: 'account', value: `${familyId}:${userId}` },
+    { scope: 'ip-account', value: `${ip}:${familyId}:${userId}` }
+  ]
+  const rl = await checkRateLimit(c, { action: 'image-sig', limit: 20, windowSeconds: 60 }, keys)
+  if (!rl.success) return c.json({ success: false, error: 'Rate limit exceeded' }, 429)
+
   const timestamp = Math.round(new Date().getTime() / 1000)
   const folder = `family_${familyId}`
-  const nonce = Math.random().toString(36).substring(2, 10)
+  const nonce = crypto.randomUUID()
   const public_id = `img_${timestamp}_${nonce}`
   const full_public_id = `${folder}/${public_id}`
 
@@ -132,11 +153,23 @@ items.post('/api/images/signature', async (c) => {
 })
 
 items.post('/api/images/complete', async (c) => {
-  const rl = await checkRateLimit(c, { action: 'image-complete', limit: 20, windowSeconds: 60 })
+  const familyId = c.get('family_id')
+  const secret = getCookieSecret(c)
+  const username = (await getSignedCookie(c, secret, 'session')) || ''
+  const userId = await getUserId(c, username, familyId)
+  
+  if (!userId) return c.json({ success: false, error: 'User not found' }, 403)
+
+  const ip = c.req.header('x-real-ip') || c.req.header('x-forwarded-for') || 'unknown'
+  const keys = [
+    { scope: 'ip', value: ip },
+    { scope: 'account', value: `${familyId}:${userId}` },
+    { scope: 'ip-account', value: `${ip}:${familyId}:${userId}` }
+  ]
+  const rl = await checkRateLimit(c, { action: 'image-complete', limit: 20, windowSeconds: 60 }, keys)
   if (!rl.success) return c.json({ success: false, error: 'Rate limit exceeded' }, 429)
 
-  const { public_id, version, signature, secure_url } = await c.req.json()
-  const familyId = c.get('family_id')
+  const { public_id, version, signature } = await c.req.json()
   
   const expectedStr = `public_id=${public_id}&version=${version}${c.env.CLOUDINARY_API_SECRET}`
   const expectedSig = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-1', new TextEncoder().encode(expectedStr)))).map(b => b.toString(16).padStart(2, '0')).join('')
@@ -145,16 +178,68 @@ items.post('/api/images/complete', async (c) => {
     return c.json({ success: false, error: 'Invalid signature' }, 403)
   }
 
-  const record = await c.env.DB.prepare('SELECT id FROM uploaded_images WHERE public_id = ? AND family_id = ? AND status = ?').bind(public_id, familyId, 'reserved').first()
-  if (!record) return c.json({ success: false, error: 'Image not found or not reserved' }, 404)
+  const record = await c.env.DB.prepare('SELECT id FROM uploaded_images WHERE public_id = ? AND family_id = ? AND uploaded_by_user_id = ? AND status = ?')
+    .bind(public_id, familyId, userId, 'reserved').first()
+    
+  if (!record) return c.json({ success: false, error: 'Image not found or not reserved by this user' }, 404)
 
-  await c.env.DB.prepare('UPDATE uploaded_images SET status = ?, secure_url = ? WHERE id = ?').bind('temporary', secure_url, record.id).run()
+  const secure_url = `https://res.cloudinary.com/${c.env.CLOUD_NAME}/image/upload/v${version}/${public_id}`
+
+  await c.env.DB.prepare('UPDATE uploaded_images SET status = ?, secure_url = ?, updated_at = ? WHERE id = ?')
+    .bind('temporary', secure_url, new Date().toISOString(), record.id).run()
 
   return c.json({ success: true, image_id: record.id })
 })
 
+items.delete('/api/images/:id', async (c) => {
+  const id = c.req.param('id')
+  const familyId = c.get('family_id')
+  const secret = getCookieSecret(c)
+  const username = (await getSignedCookie(c, secret, 'session')) || ''
+  const userId = await getUserId(c, username, familyId)
+
+  if (!userId) return c.json({ success: false, error: 'User not found' }, 403)
+
+  const img = await c.env.DB.prepare(
+    'SELECT id, public_id, status FROM uploaded_images WHERE id = ? AND family_id = ? AND uploaded_by_user_id = ? AND status IN (?, ?)'
+  ).bind(id, familyId, userId, 'temporary', 'reserved').first<{id: number, public_id: string, status: string}>()
+
+  if (!img) return c.json({ success: false, error: 'Image not found or cannot be deleted' }, 404)
+
+  if (c.env.CLOUDINARY_API_KEY && c.env.CLOUDINARY_API_SECRET) {
+    const timestamp = Math.round(new Date().getTime() / 1000)
+    const str = `public_id=${img.public_id}&timestamp=${timestamp}${c.env.CLOUDINARY_API_SECRET}`
+    const signature = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-1', new TextEncoder().encode(str)))).map(b => b.toString(16).padStart(2, '0')).join('')
+
+    try {
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${c.env.CLOUD_NAME}/image/destroy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ public_id: img.public_id, timestamp, api_key: c.env.CLOUDINARY_API_KEY, signature })
+      })
+      const data = await res.json<CloudinaryResponse>()
+      
+      if (data.result === 'ok' || data.result === 'not found') {
+        await c.env.DB.prepare('DELETE FROM uploaded_images WHERE id = ?').bind(img.id).run()
+      } else {
+        await c.env.DB.prepare('UPDATE uploaded_images SET status = ?, updated_at = ? WHERE id = ?').bind('deletion_pending', new Date().toISOString(), img.id).run()
+      }
+    } catch (err) {
+      await c.env.DB.prepare('UPDATE uploaded_images SET status = ?, updated_at = ? WHERE id = ?').bind('deletion_pending', new Date().toISOString(), img.id).run()
+    }
+  } else {
+    await c.env.DB.prepare('DELETE FROM uploaded_images WHERE id = ?').bind(img.id).run()
+  }
+
+  return c.json({ success: true })
+})
+
 items.post('/api/items', async (c) => {
   const { name, count, unit, category, image_id } = await c.req.json()
+  const familyId = c.get('family_id')
+  const secret = getCookieSecret(c)
+  const username = (await getSignedCookie(c, secret, 'session')) || ''
+  const userId = await getUserId(c, username, familyId)
   
   if (!name || typeof name !== 'string' || name.trim() === '') {
     return c.json({ success: false, error: '商品名は必須です。' }, 400)
@@ -168,15 +253,30 @@ items.post('/api/items', async (c) => {
   const validCategories = ['dad', 'mom', 'kids', 'other']
   if (!validCategories.includes(category)) return c.json({ success: false, error: '無効なカテゴリです。' }, 400)
 
-  const familyId = c.get('family_id')
-  
+  if (image_id) {
+    // Validate image ownership and status BEFORE creating item
+    const imgCheck = await c.env.DB.prepare(
+      'SELECT id FROM uploaded_images WHERE id = ? AND family_id = ? AND uploaded_by_user_id = ? AND status = ? AND item_id IS NULL'
+    ).bind(image_id, familyId, userId, 'temporary').first()
+    
+    if (!imgCheck) {
+      return c.json({ success: false, error: 'Invalid image specified.' }, 400)
+    }
+  }
+
   const res = await c.env.DB.prepare('INSERT INTO items (name, count, unit, category, family_id) VALUES (?, ?, ?, ?, ?) RETURNING id')
     .bind(name, parsedCount, unit || '個', category, familyId).first<{id: number}>()
     
-  if (image_id) {
-    const imgCheck = await c.env.DB.prepare('SELECT id FROM uploaded_images WHERE id = ? AND family_id = ? AND status = ?').bind(image_id, familyId, 'temporary').first()
-    if (imgCheck && res) {
-      await c.env.DB.prepare('UPDATE uploaded_images SET status = ?, item_id = ? WHERE id = ?').bind('attached', res.id, image_id).run()
+  if (image_id && res) {
+    try {
+      const updateRes = await c.env.DB.prepare('UPDATE uploaded_images SET status = ?, item_id = ?, updated_at = ? WHERE id = ?')
+        .bind('attached', res.id, new Date().toISOString(), image_id).run()
+      
+      if (!updateRes.success) throw new Error('Image attach failed')
+    } catch (err) {
+      // Rollback item creation
+      await c.env.DB.prepare('DELETE FROM items WHERE id = ?').bind(res.id).run()
+      return c.json({ success: false, error: 'Failed to attach image. Item creation rolled back.' }, 500)
     }
   }
 
@@ -223,19 +323,19 @@ items.delete('/api/items/:id', async (c) => {
         } else {
           imageDeleted = false
           imageDeletionPending = true
-          await c.env.DB.prepare('UPDATE uploaded_images SET status = ?, item_id = NULL WHERE id = ?').bind('deletion_pending', img.id).run()
+          await c.env.DB.prepare('UPDATE uploaded_images SET status = ?, item_id = NULL, updated_at = ? WHERE id = ?').bind('deletion_pending', new Date().toISOString(), img.id).run()
         }
       } catch (err) {
         imageDeleted = false
         imageDeletionPending = true
         cloudinaryResult = 'error'
-        await c.env.DB.prepare('UPDATE uploaded_images SET status = ?, item_id = NULL WHERE id = ?').bind('deletion_pending', img.id).run()
+        await c.env.DB.prepare('UPDATE uploaded_images SET status = ?, item_id = NULL, updated_at = ? WHERE id = ?').bind('deletion_pending', new Date().toISOString(), img.id).run()
       }
     } else {
        imageDeleted = false
        imageDeletionPending = true
        cloudinaryResult = 'no_creds'
-       await c.env.DB.prepare('UPDATE uploaded_images SET status = ?, item_id = NULL WHERE id = ?').bind('deletion_pending', img.id).run()
+       await c.env.DB.prepare('UPDATE uploaded_images SET status = ?, item_id = NULL, updated_at = ? WHERE id = ?').bind('deletion_pending', new Date().toISOString(), img.id).run()
     }
   }
 

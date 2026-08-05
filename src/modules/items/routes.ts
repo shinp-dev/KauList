@@ -29,7 +29,14 @@ itemsRoutes.post('/:listId/items', csrfProtection, requireListMember(), async (c
   const count = typeof body.count === 'number' ? body.count : 1
   const unit = typeof body.unit === 'string' ? body.unit.trim() : '個'
   const category = typeof body.category === 'string' ? body.category.trim() : 'other'
-  const imageId = body.image_id ? parsePositiveInt(body.image_id) : undefined
+  let imageId: number | undefined
+  if (body.image_id !== undefined && body.image_id !== null) {
+    const parsedImageId = parsePositiveInt(body.image_id)
+    if (!parsedImageId) {
+      return c.json({ success: false, error: 'Invalid image ID' }, 400)
+    }
+    imageId = parsedImageId
+  }
 
   if (!name || name.length > 100) return c.json({ success: false, error: 'Invalid name' }, 400)
   if (count < 1 || count > 99) return c.json({ success: false, error: 'Invalid count' }, 400)
@@ -39,7 +46,7 @@ itemsRoutes.post('/:listId/items', csrfProtection, requireListMember(), async (c
   const service = new ItemService(c.env.DB)
   
   try {
-    const item = await service.createItem(listId, user.id, name, count, unit, category, imageId === null ? undefined : imageId)
+    const item = await service.createItem(listId, user.id, name, count, unit, category, imageId)
     return c.json({ success: true, item }, 201)
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 400)

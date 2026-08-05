@@ -51,12 +51,15 @@ listsRoutes.delete('/:listId', csrfProtection, requireListOwner(), async (c) => 
 
   const service = new ListService(c.env.DB)
   
-  const success = await service.softDeleteList(listId)
-  if (!success) {
-    return c.json({ success: false, error: 'List not found or already deleted' }, 404)
+  try {
+    const success = await service.softDeleteList(listId)
+    if (!success) {
+      return c.json({ success: false, error: 'List not found or already deleted' }, 404)
+    }
+    return c.json({ success: true })
+  } catch (err) {
+    return c.json({ success: false, error: 'Failed to delete list' }, 500)
   }
-  
-  return c.json({ success: true })
 })
 
 listsRoutes.delete('/:listId/leave', csrfProtection, requireListMember(), async (c) => {

@@ -208,7 +208,7 @@ describe('Database Integration Tests', () => {
       expect(getRes.status).toBe(302)
     })
 
-    it('List deletion idempotency and batch failure returns 404', async () => {
+    it('Second list deletion returns 404', async () => {
       // First delete is successful (performed in previous test, but we can do it here on a new list)
       const r1 = await req('POST', '/api/lists', { name: 'Delete Me' }, token)
       const newListId = (await r1.json() as any).list.id
@@ -218,6 +218,29 @@ describe('Database Integration Tests', () => {
       
       const res2 = await req('DELETE', `/api/lists/${newListId}`, null, token)
       expect(res2.status).toBe(404)
+    })
+
+    it('D1 batch failure returns 500 and does not report success', async () => {
+      const r1 = await req('POST', '/api/lists', { name: 'Batch Fail' }, token)
+      const newListId = (await r1.json() as any).list.id
+
+      // Mock db.batch to fail
+      const originalBatch = db.batch.bind(db)
+      db.batch = vi.fn().mockRejectedValue(new Error('Simulated D1 Batch Error'))
+
+      const res = await req('DELETE', `/api/lists/${newListId}`, null, token)
+      
+      // Restore original
+      db.batch = originalBatch
+
+      expect(res.status).toBe(500)
+      const json = await res.json() as any
+      expect(json.success).toBe(false)
+      expect(json.error).toBe('Failed to delete list')
+      
+      // Ensure it was not deleted
+      const lists = await db.prepare('SELECT * FROM shopping_lists WHERE id = ?').bind(newListId).first()
+      expect((lists as any).deleted_at).toBeNull()
     })
 
     it('Invalid numeric ID returns 400', async () => {
@@ -298,6 +321,32 @@ describe('Database Integration Tests', () => {
       const longName = 'A'.repeat(101)
       const res = await req('POST', `/api/lists/${listId}/items`, { name: longName, count: 1, unit: '個', category: 'food' }, token)
       expect(res.status).toBe(400)
+    })
+
+    it('Validates image_id correctly', async () => {
+      // 未指定: 201
+      const res1 = await req('POST', `/api/lists/${listId}/items`, { name: 'Item1', count: 1, unit: '個', category: 'food' }, token)
+      expect(res1.status).toBe(201)
+      
+      // null: 201
+      const res2 = await req('POST', `/api/lists/${listId}/items`, { name: 'Item2', count: 1, unit: '個', category: 'food', image_id: null }, token)
+      expect(res2.status).toBe(201)
+      
+      // -1: 400
+      const res3 = await req('POST', `/api/lists/${listId}/items`, { name: 'Item3', count: 1, unit: '個', category: 'food', image_id: -1 }, token)
+      expect(res3.status).toBe(400)
+      
+      // 0: 400
+      const res4 = await req('POST', `/api/lists/${listId}/items`, { name: 'Item4', count: 1, unit: '個', category: 'food', image_id: 0 }, token)
+      expect(res4.status).toBe(400)
+      
+      // "abc": 400
+      const res5 = await req('POST', `/api/lists/${listId}/items`, { name: 'Item5', count: 1, unit: '個', category: 'food', image_id: 'abc' }, token)
+      expect(res5.status).toBe(400)
+      
+      // 1.5: 400
+      const res6 = await req('POST', `/api/lists/${listId}/items`, { name: 'Item6', count: 1, unit: '個', category: 'food', image_id: 1.5 }, token)
+      expect(res6.status).toBe(400)
     })
 
     it('PATCH on non-existent item returns 404', async () => {

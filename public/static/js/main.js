@@ -231,6 +231,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const file = fileInput.files[0]
         
         let image_id = undefined
+        let reservedImageId = undefined
+        let completedImageId = undefined
+
+        const cleanupTemporaryImage = async () => {
+          const targetId = completedImageId || reservedImageId
+          if (!targetId) return
+          try {
+            await fetchJson(`/api/lists/${listId}/images/${targetId}`, {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' }
+            })
+          } catch (error) {
+            console.error('Failed to cleanup temporary image', error)
+          }
+        }
         
         if (file) {
           progress.style.display = 'block'
@@ -238,6 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
           try {
             // 1. Signature
             const sigJson = await fetchJson(`/api/lists/${listId}/images/signature`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+            reservedImageId = sigJson.image_id
             
             // 2. Cloudinary Upload
             const formData = new FormData()
@@ -261,9 +277,11 @@ document.addEventListener('DOMContentLoaded', () => {
               body: JSON.stringify({ public_id: sigJson.public_id, version: uploadData.version, signature: uploadData.signature })
             })
             
-            image_id = compJson.image_id
+            completedImageId = compJson.image_id
+            image_id = completedImageId
           } catch (err) {
             alert('画像アップロードに失敗しました: ' + err.message)
+            cleanupTemporaryImage()
             submitBtn.disabled = false
             progress.style.display = 'none'
             return
@@ -281,13 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
           loadItems()
         } catch (err) {
           alert('商品の追加に失敗しました: ' + err.message)
-          if (image_id) {
-             // 失敗時の一時画像解放APIを呼び出す（非同期でOK、エラーは無視してログのみ）
-             fetch(`/api/lists/${listId}/images/${image_id}`, {
-               method: 'DELETE',
-               headers: { 'Content-Type': 'application/json' }
-             }).catch(console.error)
-          }
+          cleanupTemporaryImage()
         } finally {
           submitBtn.disabled = false
           if (progress) progress.style.display = 'none'

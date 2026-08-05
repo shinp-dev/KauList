@@ -41,21 +41,37 @@ export class ListService {
     await this.listRepo.updateListName(listId, name)
   }
 
-  async softDeleteList(listId: number): Promise<void> {
+  async softDeleteList(listId: number): Promise<boolean> {
     const now = new Date().toISOString()
     
-    // 論理削除
-    await this.listRepo.softDeleteList(listId, now)
-    
-    // 招待を失効させる
-    const inviteRepo = new InviteRepository(this.db)
-    await inviteRepo.revokeAllInvites(listId, now)
-    
-    // 画像ステータスを更新する
-    const imageRepo = new ImageRepository(this.db)
-    await imageRepo.markListImagesAsDeletionPending(listId, now)
+    // アトミックなバッチ実行
+    const results = await this.db.batch([
+      this.db.prepare(`
+        UPDATE shopping_lists
+        SET deleted_at = ?, updated_at = ?
+        WHERE id = ? AND deleted_at IS NULL
+      `).bind(now, now, listId),
 
+      this.db.prepare(`
+        UPDATE invite_codes
+        SET revoked_at = ?
+        WHERE list_id = ? AND revoked_at IS NULL
+      `).bind(now, listId),
+
+      this.db.prepare(`
+        UPDATE uploaded_images
+        SET status = 'deletion_pending', updated_at = ?, next_retry_at = NULL
+        WHERE list_id = ? AND status IN ('reserved', 'temporary', 'attached')
+      `).bind(now, listId)
+    ])
+
+    // リストが既に削除済みだったか存在しない場合
+    if (!results[0].meta.changes || results[0].meta.changes === 0) {
+      return false
+    }
+    
     // 画像が0件なら即時物理削除
     await this.listRepo.deleteLogicallyDeletedListIfEmpty(listId)
+    return true
   }
 }

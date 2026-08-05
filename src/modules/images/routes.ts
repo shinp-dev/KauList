@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { parsePositiveInt } from '../../lib/validators'
 import type { Bindings, Variables } from '../../types'
 import { requireAuth, requireListMember } from '../../middleware/auth'
 import { ImageService } from './service'
@@ -12,7 +13,9 @@ const imagesRoutes = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 imagesRoutes.use('*', requireAuth)
 
 imagesRoutes.post('/:listId/images/signature', csrfProtection, requireListMember(), async (c) => {
-  const listId = Number(c.req.param('listId'))
+  const listId = parsePositiveInt(c.req.param('listId'))
+  if (!listId) return c.json({ success: false, error: 'Invalid list ID' }, 400)
+  
   const user = c.get('user')!
 
   const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || '127.0.0.1'
@@ -36,7 +39,9 @@ imagesRoutes.post('/:listId/images/signature', csrfProtection, requireListMember
 })
 
 imagesRoutes.post('/:listId/images/complete', csrfProtection, requireListMember(), async (c) => {
-  const listId = Number(c.req.param('listId'))
+  const listId = parsePositiveInt(c.req.param('listId'))
+  if (!listId) return c.json({ success: false, error: 'Invalid list ID' }, 400)
+
   const user = c.get('user')!
   const body = await c.req.json()
 
@@ -76,8 +81,10 @@ imagesRoutes.post('/:listId/images/complete', csrfProtection, requireListMember(
 })
 
 imagesRoutes.delete('/:listId/images/:imageId', csrfProtection, requireListMember(), async (c) => {
-  const listId = Number(c.req.param('listId'))
-  const imageId = Number(c.req.param('imageId'))
+  const listId = parsePositiveInt(c.req.param('listId'))
+  const imageId = parsePositiveInt(c.req.param('imageId'))
+  if (!listId || !imageId) return c.json({ success: false, error: 'Invalid ID' }, 400)
+  
   const user = c.get('user')!
 
   const service = new ImageService(c.env.DB, c.env)

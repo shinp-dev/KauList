@@ -2,6 +2,7 @@ import type { Context, Next } from 'hono'
 import { getCookie } from 'hono/cookie'
 import type { Bindings, Variables, UserSession, ListMember } from '../types'
 import { hashToken } from '../lib/crypto'
+import { parsePositiveInt } from '../lib/validators'
 
 export async function requireAuth(c: Context<{ Bindings: Bindings, Variables: Variables }>, next: Next) {
   if (c.get('user')) {
@@ -63,7 +64,7 @@ export function requireListMember() {
     const user = c.get('user')
     if (!user) return c.json({ success: false, error: 'Unauthorized' }, 401)
 
-    const listId = c.req.param('listId')
+    const listId = parsePositiveInt(c.req.param('listId'))
     if (!listId) return c.json({ success: false, error: 'List ID required' }, 400)
 
     const member = await c.env.DB.prepare(`
@@ -86,7 +87,7 @@ export function requireListOwner() {
     const user = c.get('user')
     if (!user) return c.json({ success: false, error: 'Unauthorized' }, 401)
 
-    const listId = c.req.param('listId')
+    const listId = parsePositiveInt(c.req.param('listId'))
     if (!listId) return c.json({ success: false, error: 'List ID required' }, 400)
 
     const member = await c.env.DB.prepare(`

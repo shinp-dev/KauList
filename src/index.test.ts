@@ -11,7 +11,14 @@ vi.mock('hono/cookie', async (importOriginal) => {
   let currentToken: string | undefined = undefined
   return {
     ...actual,
-    setCookie: vi.fn((c, key, val) => { if (key === 'session_token') currentToken = val }),
+    setCookie: vi.fn((c, key, val, options) => {
+      if (key === 'session_token') {
+        currentToken = val
+        let cookieStr = `${key}=${val}`
+        if (options && options.secure) cookieStr += '; Secure'
+        c.header('set-cookie', cookieStr, { append: true })
+      }
+    }),
     getCookie: vi.fn((c, key) => {
       if (key === 'session_token') {
         const header = c.req.header('cookie') || ''
@@ -114,6 +121,30 @@ describe('Database Integration Tests', () => {
       
       spy.mockRestore()
     })
+
+    it('Registration and login set same secure cookie in production', async () => {
+      const env = getEnv()
+      env.ENVIRONMENT = 'production'
+      
+      const reqWithEnv = async (path: string, body: any) => {
+        return app.request(new Request(`http://localhost${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Origin': 'http://localhost', 'Host': 'localhost' },
+          body: JSON.stringify(body)
+        }), undefined, env)
+      }
+
+      const r1 = await reqWithEnv('/api/auth/register', { login_id: 'secureuser', display_name: 'Secure', password: 'password123' })
+      expect(r1.headers.get('set-cookie')).toContain('Secure')
+
+      const r2 = await reqWithEnv('/api/auth/login', { login_id: 'secureuser', password: 'password123' })
+      expect(r2.headers.get('set-cookie')).toContain('Secure')
+    })
+    
+    it('Development environment sets non-secure cookie on registration', async () => {
+      const r1 = await req('POST', '/api/auth/register', { login_id: 'devuser', display_name: 'Dev', password: 'password123' })
+      expect(r1.headers.get('set-cookie')).not.toContain('Secure')
+    })
   })
 
   describe('CSRF Protection', () => {
@@ -175,6 +206,26 @@ describe('Database Integration Tests', () => {
       // Frontend route redirects to /
       const getRes = await req('GET', `/lists/${listId}`, null, token)
       expect(getRes.status).toBe(302)
+    })
+
+    it('List deletion idempotency and batch failure returns 404', async () => {
+      // First delete is successful (performed in previous test, but we can do it here on a new list)
+      const r1 = await req('POST', '/api/lists', { name: 'Delete Me' }, token)
+      const newListId = (await r1.json() as any).list.id
+      
+      const res1 = await req('DELETE', `/api/lists/${newListId}`, null, token)
+      expect(res1.status).toBe(200)
+      
+      const res2 = await req('DELETE', `/api/lists/${newListId}`, null, token)
+      expect(res2.status).toBe(404)
+    })
+
+    it('Invalid numeric ID returns 400', async () => {
+      const res = await req('GET', `/api/lists/abc/items`, null, token)
+      expect(res.status).toBe(400)
+      
+      const res2 = await req('GET', `/api/lists/-1/items`, null, token)
+      expect(res2.status).toBe(400)
     })
   })
 
@@ -247,6 +298,16 @@ describe('Database Integration Tests', () => {
       const longName = 'A'.repeat(101)
       const res = await req('POST', `/api/lists/${listId}/items`, { name: longName, count: 1, unit: '個', category: 'food' }, token)
       expect(res.status).toBe(400)
+    })
+
+    it('PATCH on non-existent item returns 404', async () => {
+      const res = await req('PATCH', `/api/lists/${listId}/items/99999`, { bought: true }, token)
+      expect(res.status).toBe(404)
+    })
+    
+    it('DELETE on non-existent item returns 404', async () => {
+      const res = await req('DELETE', `/api/lists/${listId}/items/99999`, null, token)
+      expect(res.status).toBe(404)
     })
   })
 })

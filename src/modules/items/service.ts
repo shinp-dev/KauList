@@ -53,7 +53,7 @@ export class ItemService {
     return item
   }
 
-  async updateBoughtStatus(listId: number, itemId: number, bought: boolean, userId: number): Promise<void> {
-    await this.itemRepo.updateBoughtStatus(listId, itemId, bought, userId, new Date().toISOString())
+  async updateBoughtStatus(listId: number, itemId: number, bought: boolean, userId: number): Promise<boolean> {
+    return await this.itemRepo.updateBoughtStatus(listId, itemId, bought, userId, new Date().toISOString())
   }
 }

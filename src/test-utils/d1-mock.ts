@@ -77,6 +77,16 @@ export function createD1Mock(schemaPath: string, migrationPath?: string) {
     },
     exec: async (query: string) => {
       db.exec(query)
+    },
+    batch: async (statements: any[]) => {
+      // Mock D1 batch by running statements sequentially in memory
+      const results = []
+      for (const stmt of statements) {
+        // Each stmt is a result of db.prepare().bind()
+        // Which in our mock returns an object with run(), all(), first()
+        results.push(await stmt.run())
+      }
+      return results
     }
   }
 

@@ -1,4 +1,13 @@
 document.addEventListener('DOMContentLoaded', () => {
+  async function fetchJson(url, options) {
+    const response = await fetch(url, options)
+    const json = await response.json().catch(() => ({}))
+    if (!response.ok || !json.success) {
+      throw new Error(json.error || `HTTP ${response.status}`)
+    }
+    return json
+  }
+
   const loginForm = document.getElementById('login-form')
   const registerForm = document.getElementById('register-form')
   const logoutBtn = document.getElementById('logout-btn')
@@ -16,18 +25,17 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault()
       const fd = new FormData(loginForm)
       const data = Object.fromEntries(fd.entries())
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      })
-      const json = await res.json()
-      if (json.success) {
+      try {
+        await fetchJson('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        })
         window.location.href = '/'
-      } else {
-        const err = document.getElementById('error-message')
-        err.textContent = json.error
-        err.style.display = 'block'
+      } catch (err) {
+        const errEl = document.getElementById('error-message')
+        errEl.textContent = err.message
+        errEl.style.display = 'block'
       }
     })
   }
@@ -43,25 +51,26 @@ document.addEventListener('DOMContentLoaded', () => {
         err.style.display = 'block'
         return
       }
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      })
-      const json = await res.json()
-      if (json.success) {
+      try {
+        await fetchJson('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        })
         window.location.href = '/'
-      } else {
-        const err = document.getElementById('error-message')
-        err.textContent = json.error
-        err.style.display = 'block'
+      } catch (err) {
+        const errEl = document.getElementById('error-message')
+        errEl.textContent = err.message
+        errEl.style.display = 'block'
       }
     })
   }
 
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
-      await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+      try {
+        await fetchJson('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+      } catch (err) {}
       window.location.href = '/login'
     })
   }
@@ -81,16 +90,15 @@ document.addEventListener('DOMContentLoaded', () => {
     createListForm.addEventListener('submit', async (e) => {
       e.preventDefault()
       const name = document.getElementById('new-list-name').value
-      const res = await fetch('/api/lists', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
-      })
-      const json = await res.json()
-      if (json.success) {
+      try {
+        const json = await fetchJson('/api/lists', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        })
         window.location.href = '/lists/' + json.list.id
-      } else {
-        alert(json.error)
+      } catch (err) {
+        alert(err.message)
       }
     })
   }
@@ -99,18 +107,17 @@ document.addEventListener('DOMContentLoaded', () => {
   if (joinData) {
     const token = joinData.dataset.token
     document.getElementById('btn-accept-invite').addEventListener('click', async () => {
-      const res = await fetch('/api/invites/accept', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token })
-      })
-      const json = await res.json()
-      if (json.success) {
+      try {
+        const json = await fetchJson('/api/invites/accept', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token })
+        })
         window.location.href = '/lists/' + json.listId
-      } else {
-        const err = document.getElementById('error-message')
-        err.textContent = json.error
-        err.style.display = 'block'
+      } catch (err) {
+        const errEl = document.getElementById('error-message')
+        errEl.textContent = err.message
+        errEl.style.display = 'block'
       }
     })
   }
@@ -122,10 +129,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const loadItems = async () => {
       if (listId === '0') return
-      const res = await fetch(`/api/lists/${listId}/items`)
-      const json = await res.json()
-      if (json.success) {
+      try {
+        const json = await fetchJson(`/api/lists/${listId}/items`)
         renderItems(json.items)
+      } catch (err) {
+        console.error(err)
       }
     }
 
@@ -150,18 +158,17 @@ document.addEventListener('DOMContentLoaded', () => {
         checkbox.type = 'checkbox'
         checkbox.checked = item.bought === 1
         checkbox.onchange = async () => {
-          const res = await fetch(`/api/lists/${listId}/items/${item.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bought: checkbox.checked })
-          })
-          if (!res.ok) {
-            const json = await res.json().catch(() => ({}))
-            alert('更新に失敗しました: ' + (json.error || '不明なエラー'))
+          try {
+            await fetchJson(`/api/lists/${listId}/items/${item.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bought: checkbox.checked })
+            })
+            loadItems()
+          } catch (err) {
+            alert('更新に失敗しました: ' + err.message)
             checkbox.checked = !checkbox.checked
-            return
           }
-          loadItems()
         }
 
         const details = document.createElement('div')
@@ -192,13 +199,12 @@ document.addEventListener('DOMContentLoaded', () => {
         delBtn.className = 'btn-danger'
         delBtn.onclick = async () => {
           if (confirm('削除しますか？')) {
-            const res = await fetch(`/api/lists/${listId}/items/${item.id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } })
-            if (!res.ok) {
-              const json = await res.json().catch(() => ({}))
-              alert('削除に失敗しました: ' + (json.error || '不明なエラー'))
-              return
+            try {
+              await fetchJson(`/api/lists/${listId}/items/${item.id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } })
+              loadItems()
+            } catch (err) {
+              alert('削除に失敗しました: ' + err.message)
             }
-            loadItems()
           }
         }
         li.appendChild(delBtn)
@@ -231,9 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
           
           try {
             // 1. Signature
-            const sigRes = await fetch(`/api/lists/${listId}/images/signature`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-            const sigJson = await sigRes.json()
-            if (!sigJson.success) throw new Error(sigJson.error)
+            const sigJson = await fetchJson(`/api/lists/${listId}/images/signature`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
             
             // 2. Cloudinary Upload
             const formData = new FormData()
@@ -251,13 +255,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (uploadData.error) throw new Error(uploadData.error.message)
             
             // 3. Complete
-            const compRes = await fetch(`/api/lists/${listId}/images/complete`, {
+            const compJson = await fetchJson(`/api/lists/${listId}/images/complete`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ public_id: sigJson.public_id, version: uploadData.version, signature: uploadData.signature })
             })
-            const compJson = await compRes.json()
-            if (!compJson.success) throw new Error(compJson.error)
             
             image_id = compJson.image_id
           } catch (err) {
@@ -269,24 +271,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // 4. Create Item
-        const itemRes = await fetch(`/api/lists/${listId}/items`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, count, unit, category, image_id })
-        })
-        
-        const itemJson = await itemRes.json().catch(() => ({}))
-        if (!itemRes.ok || !itemJson.success) {
-          alert('商品の追加に失敗しました: ' + (itemJson.error || '不明なエラー'))
+        try {
+          await fetchJson(`/api/lists/${listId}/items`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, count, unit, category, image_id })
+          })
+          itemForm.reset()
+          loadItems()
+        } catch (err) {
+          alert('商品の追加に失敗しました: ' + err.message)
+          if (image_id) {
+             // 失敗時の一時画像解放APIを呼び出す（非同期でOK、エラーは無視してログのみ）
+             fetch(`/api/lists/${listId}/images/${image_id}`, {
+               method: 'DELETE',
+               headers: { 'Content-Type': 'application/json' }
+             }).catch(console.error)
+          }
+        } finally {
           submitBtn.disabled = false
           if (progress) progress.style.display = 'none'
-          return // Do not reset form
         }
-        
-        itemForm.reset()
-        submitBtn.disabled = false
-        if (progress) progress.style.display = 'none'
-        loadItems()
       })
     }
     
@@ -294,14 +299,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnShare = document.getElementById('btn-share')
     if (btnShare && shareDialog) {
       btnShare.addEventListener('click', async () => {
-        const res = await fetch(`/api/lists/${listId}/invites`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-        const json = await res.json()
-        if (json.success) {
+        try {
+          const json = await fetchJson(`/api/lists/${listId}/invites`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
           const url = `${window.location.origin}/join?code=${json.token}`
           document.getElementById('invite-url').value = url
           shareDialog.showModal()
-        } else {
-          alert(json.error)
+        } catch (err) {
+          alert(err.message)
         }
       })
       
@@ -318,9 +322,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnMembers = document.getElementById('btn-members')
     if (btnMembers && membersDialog) {
       const loadMembers = async () => {
-        const res = await fetch(`/api/lists/${listId}/members`)
-        const json = await res.json()
-        if (json.success) {
+        try {
+          const json = await fetchJson(`/api/lists/${listId}/members`)
           const list = document.getElementById('members-list')
           list.innerHTML = ''
           for (const m of json.members) {
@@ -342,19 +345,20 @@ document.addEventListener('DOMContentLoaded', () => {
               delBtn.className = 'btn-danger'
               delBtn.onclick = async () => {
                 if (confirm('削除しますか？')) {
-                  const res = await fetch(`/api/lists/${listId}/members/${m.id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } })
-                  const json = await res.json().catch(() => ({}))
-                  if (!res.ok || !json.success) {
-                    alert('削除に失敗しました: ' + (json.error || '不明なエラー'))
-                    return
+                  try {
+                    await fetchJson(`/api/lists/${listId}/members/${m.id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } })
+                    loadMembers()
+                  } catch (err) {
+                    alert('削除に失敗しました: ' + err.message)
                   }
-                  loadMembers()
                 }
               }
               li.appendChild(delBtn)
             }
             list.appendChild(li)
           }
+        } catch (err) {
+          console.error(err)
         }
       }
 
@@ -372,16 +376,15 @@ document.addEventListener('DOMContentLoaded', () => {
       btnRenameList.addEventListener('click', async () => {
         const newName = prompt('新しいリスト名を入力してください:')
         if (newName && newName.trim()) {
-          const res = await fetch(`/api/lists/${listId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: newName.trim() })
-          })
-          const json = await res.json()
-          if (json.success) {
+          try {
+            await fetchJson(`/api/lists/${listId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: newName.trim() })
+            })
             window.location.reload()
-          } else {
-            alert(json.error)
+          } catch (err) {
+            alert(err.message)
           }
         }
       })
@@ -392,15 +395,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnDeleteList) {
       btnDeleteList.addEventListener('click', async () => {
         if (confirm('本当にこのリストを削除しますか？\n(※この操作は取り消せません)')) {
-          const res = await fetch(`/api/lists/${listId}`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' }
-          })
-          const json = await res.json()
-          if (json.success) {
+          try {
+            await fetchJson(`/api/lists/${listId}`, {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' }
+            })
             window.location.href = '/'
-          } else {
-            alert(json.error)
+          } catch (err) {
+            alert(err.message)
           }
         }
       })
@@ -411,15 +413,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnLeaveList) {
       btnLeaveList.addEventListener('click', async () => {
         if (confirm('本当にこのリストから退出しますか？')) {
-          const res = await fetch(`/api/lists/${listId}/leave`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' }
-          })
-          const json = await res.json()
-          if (json.success) {
+          try {
+            await fetchJson(`/api/lists/${listId}/leave`, {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' }
+            })
             window.location.href = '/'
-          } else {
-            alert(json.error)
+          } catch (err) {
+            alert(err.message)
           }
         }
       })

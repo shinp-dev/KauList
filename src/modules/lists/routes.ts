@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { parsePositiveInt } from '../../lib/validators'
 import type { Bindings, Variables } from '../../types'
 import { requireAuth, requireListOwner, requireListMember } from '../../middleware/auth'
 import { ListService } from './service'
@@ -32,7 +33,9 @@ listsRoutes.post('/', csrfProtection, async (c) => {
 })
 
 listsRoutes.patch('/:listId', csrfProtection, requireListOwner(), async (c) => {
-  const listId = Number(c.req.param('listId'))
+  const listId = parsePositiveInt(c.req.param('listId'))
+  if (!listId) return c.json({ success: false, error: 'Invalid list ID' }, 400)
+  
   const body = await c.req.json()
   const name = typeof body.name === 'string' ? body.name.trim() : ''
   if (!name || name.length > 50) return c.json({ success: false, error: 'Invalid name' }, 400)
@@ -43,16 +46,23 @@ listsRoutes.patch('/:listId', csrfProtection, requireListOwner(), async (c) => {
 })
 
 listsRoutes.delete('/:listId', csrfProtection, requireListOwner(), async (c) => {
-  const listId = Number(c.req.param('listId'))
+  const listId = parsePositiveInt(c.req.param('listId'))
+  if (!listId) return c.json({ success: false, error: 'Invalid list ID' }, 400)
+
   const service = new ListService(c.env.DB)
   
-  await service.softDeleteList(listId)
+  const success = await service.softDeleteList(listId)
+  if (!success) {
+    return c.json({ success: false, error: 'List not found or already deleted' }, 404)
+  }
   
   return c.json({ success: true })
 })
 
 listsRoutes.delete('/:listId/leave', csrfProtection, requireListMember(), async (c) => {
-  const listId = Number(c.req.param('listId'))
+  const listId = parsePositiveInt(c.req.param('listId'))
+  if (!listId) return c.json({ success: false, error: 'Invalid list ID' }, 400)
+
   const user = c.get('user')!
 
   const repo = new MemberRepository(c.env.DB)

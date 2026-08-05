@@ -22,17 +22,19 @@ export class ItemRepository {
     return item
   }
 
-  async deleteItem(itemId: number, listId: number): Promise<void> {
-    await this.db.prepare('DELETE FROM items WHERE id = ? AND list_id = ?').bind(itemId, listId).run()
+  async deleteItem(itemId: number, listId: number): Promise<boolean> {
+    const res = await this.db.prepare('DELETE FROM items WHERE id = ? AND list_id = ?').bind(itemId, listId).run()
+    return !!res.meta.changes && res.meta.changes > 0
   }
 
-  async updateBoughtStatus(listId: number, itemId: number, bought: boolean, userId: number, now: string): Promise<void> {
+  async updateBoughtStatus(listId: number, itemId: number, bought: boolean, userId: number, now: string): Promise<boolean> {
     const val = bought ? 1 : 0
     const boughtBy = bought ? userId : null
     
-    await this.db.prepare(
+    const res = await this.db.prepare(
       'UPDATE items SET bought = ?, bought_by_user_id = ?, updated_at = ? WHERE id = ? AND list_id = ?'
     ).bind(val, boughtBy, now, itemId, listId).run()
+    return !!res.meta.changes && res.meta.changes > 0
   }
 
   async checkItemExists(itemId: number, listId: number): Promise<boolean> {

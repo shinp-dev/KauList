@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { parsePositiveInt } from '../../lib/validators'
 import type { Bindings, Variables } from '../../types'
 import { requireAuth, requireListOwner } from '../../middleware/auth'
 import { InviteService } from './service'
@@ -11,14 +12,18 @@ const invitesRoutes = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 invitesRoutes.use('*', requireAuth)
 
 invitesRoutes.get('/:listId/invites', requireListOwner(), async (c) => {
-  const listId = Number(c.req.param('listId'))
+  const listId = parsePositiveInt(c.req.param('listId'))
+  if (!listId) return c.json({ success: false, error: 'Invalid list ID' }, 400)
+  
   const service = new InviteService(c.env.DB)
   const invites = await service.getInvites(listId)
   return c.json({ success: true, invites })
 })
 
 invitesRoutes.post('/:listId/invites', csrfProtection, requireListOwner(), async (c) => {
-  const listId = Number(c.req.param('listId'))
+  const listId = parsePositiveInt(c.req.param('listId'))
+  if (!listId) return c.json({ success: false, error: 'Invalid list ID' }, 400)
+  
   const user = c.get('user')!
 
   const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || '127.0.0.1'
@@ -36,8 +41,9 @@ invitesRoutes.post('/:listId/invites', csrfProtection, requireListOwner(), async
 })
 
 invitesRoutes.delete('/:listId/invites/:inviteId', csrfProtection, requireListOwner(), async (c) => {
-  const listId = Number(c.req.param('listId'))
-  const inviteId = Number(c.req.param('inviteId'))
+  const listId = parsePositiveInt(c.req.param('listId'))
+  const inviteId = parsePositiveInt(c.req.param('inviteId'))
+  if (!listId || !inviteId) return c.json({ success: false, error: 'Invalid ID' }, 400)
 
   const service = new InviteService(c.env.DB)
   await service.revokeInvite(inviteId, listId)

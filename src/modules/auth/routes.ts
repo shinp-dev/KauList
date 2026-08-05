@@ -7,6 +7,16 @@ import { checkRateLimit } from '../../lib/rateLimit'
 
 const authRoutes = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 
+function setSessionCookie(c: any, token: string) {
+  setCookie(c, 'session_token', token, {
+    path: '/',
+    httpOnly: true,
+    secure: c.env.ENVIRONMENT === 'production',
+    sameSite: 'Strict',
+    maxAge: 30 * 24 * 60 * 60
+  })
+}
+
 authRoutes.post('/register', csrfProtection, async (c) => {
   const body = await c.req.json()
   const loginId = typeof body.login_id === 'string' ? body.login_id.trim() : ''
@@ -28,13 +38,7 @@ authRoutes.post('/register', csrfProtection, async (c) => {
   try {
     const { token } = await service.registerAndCreateSession(loginId, displayName, passwordHash)
 
-    setCookie(c, 'session_token', token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'Strict',
-      path: '/',
-      maxAge: 30 * 24 * 60 * 60
-    })
+    setSessionCookie(c, token)
 
     return c.json({ success: true }, 201)
   } catch (err: any) {
@@ -67,13 +71,7 @@ authRoutes.post('/login', csrfProtection, async (c) => {
   }
 
   const token = await service.createSession(user.id)
-  setCookie(c, 'session_token', token, {
-    path: '/',
-    httpOnly: true,
-    secure: c.env.ENVIRONMENT === 'production',
-    sameSite: 'Strict',
-    maxAge: 30 * 24 * 60 * 60
-  })
+  setSessionCookie(c, token)
 
   return c.json({ success: true })
 })

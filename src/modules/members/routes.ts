@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { parsePositiveInt } from '../../lib/validators'
 import type { Bindings, Variables } from '../../types'
 import { requireAuth, requireListOwner, requireListMember } from '../../middleware/auth'
 import { csrfProtection } from '../../middleware/csrf'
@@ -9,15 +10,18 @@ const membersRoutes = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 membersRoutes.use('*', requireAuth)
 
 membersRoutes.get('/:listId/members', requireListMember(), async (c) => {
-  const listId = Number(c.req.param('listId'))
+  const listId = parsePositiveInt(c.req.param('listId'))
+  if (!listId) return c.json({ success: false, error: 'Invalid list ID' }, 400)
+  
   const repo = new MemberRepository(c.env.DB)
   const members = await repo.getMembers(listId)
   return c.json({ success: true, members })
 })
 
 membersRoutes.delete('/:listId/members/:userId', csrfProtection, requireListOwner(), async (c) => {
-  const listId = Number(c.req.param('listId'))
-  const targetUserId = Number(c.req.param('userId'))
+  const listId = parsePositiveInt(c.req.param('listId'))
+  const targetUserId = parsePositiveInt(c.req.param('userId'))
+  if (!listId || !targetUserId) return c.json({ success: false, error: 'Invalid ID' }, 400)
   const user = c.get('user')!
 
   if (targetUserId === user.id) {

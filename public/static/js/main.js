@@ -218,15 +218,52 @@ document.addEventListener('DOMContentLoaded', () => {
     const role = appData.dataset.role
     const cloudName = appData.dataset.cloudName
     
+    let lastItemsSignature = ''
+    let pollTimer = null
+
     const loadItems = async () => {
       if (listId === '0') return
       try {
         const json = await fetchJson(`/api/lists/${listId}/items`)
-        renderItems(json.items)
+        const signature = JSON.stringify(json.items)
+        if (signature !== lastItemsSignature) {
+          lastItemsSignature = signature
+          renderItems(json.items)
+        }
       } catch (err) {
         console.error(err)
       }
     }
+
+    const stopPolling = () => {
+      if (pollTimer) {
+        clearInterval(pollTimer)
+        pollTimer = null
+      }
+    }
+
+    const startPolling = () => {
+      stopPolling()
+      if (document.hidden || listId === '0') return
+      pollTimer = setInterval(() => {
+        if (!document.hidden) {
+          loadItems()
+        }
+      }, 5000)
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        stopPolling()
+      } else {
+        loadItems()
+        startPolling()
+      }
+    })
+
+    window.addEventListener('beforeunload', () => {
+      stopPolling()
+    })
 
     const categoryMap = {
       food: { label: '食品' },
@@ -357,6 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.nextElementSibling) {
           e.target.nextElementSibling.classList.add('active')
         }
+        lastItemsSignature = '' // reset signature to force re-render on filter change
         loadItems()
       })
     })
@@ -624,7 +662,8 @@ document.addEventListener('DOMContentLoaded', () => {
       })
     }
 
-    // Initial load
+    // Initial load & start background polling
     loadItems()
+    startPolling()
   }
 })

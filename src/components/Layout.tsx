@@ -1,5 +1,7 @@
 import { html } from 'hono/html'
 
+const SITE_DOMAIN = 'https://kaulist.shinp-studio.com'
+
 export const Layout = (props: {
   title: string
   children?: any
@@ -9,8 +11,8 @@ export const Layout = (props: {
   canonicalUrl?: string
   ogImageUrl?: string
 }) => {
-  const canonical = props.canonicalUrl || ''
-  const ogImage = props.ogImageUrl || '/assets/icon.png'
+  const canonical = props.canonicalUrl || SITE_DOMAIN
+  const ogImage = props.ogImageUrl || `${SITE_DOMAIN}/assets/icon.png`
 
   return html`<!DOCTYPE html>
 <html lang="ja">
@@ -20,10 +22,10 @@ export const Layout = (props: {
   <title>${props.title} - KauList</title>
   <meta name="description" content="KauList（カウリスト）は「買うリスト」を、かわいく・わかりやすく・誰かと共有できる買い物リストアプリです。">
   <link rel="icon" href="/assets/icon.png" type="image/png">
-  ${canonical ? html`<link rel="canonical" href="${canonical}">` : ''}
+  <link rel="canonical" href="${canonical}">
   <meta property="og:title" content="${props.title} - KauList">
   <meta property="og:description" content="「買うリスト」を、かわいく・わかりやすく・誰かと共有できるアプリ">
-  ${canonical ? html`<meta property="og:url" content="${canonical}">` : ''}
+  <meta property="og:url" content="${canonical}">
   <meta property="og:image" content="${ogImage}">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="KauList">

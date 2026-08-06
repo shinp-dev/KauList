@@ -1,9 +1,11 @@
 import { jsx } from 'hono/jsx'
 import { KauListBrandLogo, MainCharacterImage, PlusIcon, ShareIcon, ImageIcon, TagIcon } from './CowAssets'
 
+const SITE_DOMAIN = 'https://kaulist.shinp-studio.com'
+
 export const LandingPage = (props?: { canonicalUrl?: string, ogImageUrl?: string }) => {
-  const canonical = props?.canonicalUrl || ''
-  const ogImage = props?.ogImageUrl || '/assets/icon.png'
+  const canonical = props?.canonicalUrl || SITE_DOMAIN
+  const ogImage = props?.ogImageUrl || `${SITE_DOMAIN}/assets/icon.png`
 
   return (
     <html lang="ja">
@@ -13,10 +15,10 @@ export const LandingPage = (props?: { canonicalUrl?: string, ogImageUrl?: string
         <title>KauList - かんたん共有買い物リスト</title>
         <meta name="description" content="KauList（カウリスト）は「買うリスト」を、かわいく・わかりやすく・誰かと共有できる買い物リストアプリです。" />
         <link rel="icon" href="/assets/icon.png" type="image/png" />
-        {canonical && <link rel="canonical" href={canonical} />}
+        <link rel="canonical" href={canonical} />
         <meta property="og:title" content="KauList - かんたん共有買い物リスト" />
         <meta property="og:description" content="「買うリスト」を、かわいく・わかりやすく・誰かと共有できるアプリ" />
-        {canonical && <meta property="og:url" content={canonical} />}
+        <meta property="og:url" content={canonical} />
         <meta property="og:image" content={ogImage} />
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="KauList" />

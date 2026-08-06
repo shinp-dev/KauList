@@ -3,7 +3,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const response = await fetch(url, options)
     const json = await response.json().catch(() => ({}))
     if (!response.ok || !json.success) {
-      throw new Error(json.error || `HTTP ${response.status}`)
+      const err = new Error(json.error || `HTTP ${response.status}`)
+      err.code = json.code
+      err.status = response.status
+      err.data = json
+      throw err
     }
     return json
   }
@@ -186,7 +190,11 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         window.location.href = '/lists/' + json.list.id
       } catch (err) {
-        alert(err.message)
+        if (err.code === 'OWNED_LIST_LIMIT_REACHED') {
+          alert('無料プランでは、自分のリストを1つまで作成できます。\n\n新しいリストを作るには、現在のリストを削除してください。\n（※共有されたリストへの参加数に上限はありません）')
+        } else {
+          alert(err.message)
+        }
       }
     })
   }
@@ -394,7 +402,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.nextElementSibling) {
           e.target.nextElementSibling.classList.add('active')
         }
-        lastItemsSignature = '' // reset signature to force re-render on filter change
+        lastItemsSignature = ''
         loadItems()
       })
     })

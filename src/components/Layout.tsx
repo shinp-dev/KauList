@@ -90,6 +90,9 @@ export const Layout = (props: {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
     </div>
+    <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 0 0 0.85rem 0; line-height: 1.4;">
+      無料プランでは、自分のリストを1つまで作成できます。<br />(※共有されたリストへの参加数に上限はありません)
+    </p>
     <form id="create-list-form" style="display: flex; flex-direction: column; gap: 0.85rem;">
       <div class="form-group">
         <label for="new-list-name" class="form-label">リスト名</label>

@@ -3,12 +3,34 @@ import type { ShoppingList } from '../../types'
 export class ListRepository {
   constructor(private db: D1Database) {}
 
+  async countOwnedLists(userId: number): Promise<number> {
+    const res = await this.db.prepare(
+      'SELECT COUNT(*) as c FROM shopping_lists WHERE created_by_user_id = ? AND deleted_at IS NULL'
+    ).bind(userId).first<{ c: number }>()
+    return res?.c ?? 0
+  }
+
   async createList(name: string, userId: number): Promise<ShoppingList> {
     const list = await this.db.prepare(
       'INSERT INTO shopping_lists (name, created_by_user_id) VALUES (?, ?) RETURNING *'
     ).bind(name, userId).first<ShoppingList>()
     if (!list) throw new Error('Failed to create list')
     return list
+  }
+
+  async createListWithLimit(name: string, userId: number, limit: number): Promise<ShoppingList | null> {
+    const list = await this.db.prepare(`
+      INSERT INTO shopping_lists (name, created_by_user_id)
+      SELECT ?, ?
+      WHERE (
+        SELECT COUNT(*)
+        FROM shopping_lists
+        WHERE created_by_user_id = ?
+          AND deleted_at IS NULL
+      ) < ?
+      RETURNING *
+    `).bind(name, userId, userId, limit).first<ShoppingList>()
+    return list || null
   }
 
   async deleteList(listId: number): Promise<void> {

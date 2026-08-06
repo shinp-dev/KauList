@@ -5,6 +5,7 @@ import { requireAuth, requireListOwner, requireListMember } from '../../middlewa
 import { ListService } from './service'
 import { csrfProtection } from '../../middleware/csrf'
 import { MemberRepository } from '../members/repository'
+import { OwnedListLimitError } from '../../config/planLimits'
 
 const listsRoutes = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 
@@ -28,6 +29,15 @@ listsRoutes.post('/', csrfProtection, async (c) => {
     const list = await service.createList(name, user.id)
     return c.json({ success: true, list }, 201)
   } catch (err: any) {
+    if (err instanceof OwnedListLimitError || err?.code === 'OWNED_LIST_LIMIT_REACHED') {
+      return c.json({
+        success: false,
+        code: 'OWNED_LIST_LIMIT_REACHED',
+        error: err.message || '無料プランでは自分のリストを1つまで作成できます',
+        current: err.current ?? 1,
+        limit: err.limit ?? 1
+      }, 403)
+    }
     return c.json({ success: false, error: err.message }, 500)
   }
 })

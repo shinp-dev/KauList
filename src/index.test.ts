@@ -3,6 +3,7 @@ import { join } from 'path'
 import { createD1Mock } from './test-utils/d1-mock'
 import { jsx } from 'hono/jsx'
 import app from './index'
+import { AuthService } from './modules/auth/service'
 
 const schemaPath = join(process.cwd(), 'schema.sql')
 
@@ -209,7 +210,10 @@ describe('Database Integration Tests', () => {
     })
 
     it('Second list deletion returns 404', async () => {
-      // First delete is successful (performed in previous test, but we can do it here on a new list)
+      // Delete default list first so we can create a list
+      const initialList = await db.prepare('SELECT id FROM shopping_lists').first()
+      if (initialList) await req('DELETE', `/api/lists/${initialList.id}`, null, token)
+
       const r1 = await req('POST', '/api/lists', { name: 'Delete Me' }, token)
       const newListId = (await r1.json() as any).list.id
       
@@ -221,6 +225,10 @@ describe('Database Integration Tests', () => {
     })
 
     it('D1 batch failure returns 500 and does not report success', async () => {
+      // Delete default list first so we can create a list
+      const initialList = await db.prepare('SELECT id FROM shopping_lists').first()
+      if (initialList) await req('DELETE', `/api/lists/${initialList.id}`, null, token)
+
       const r1 = await req('POST', '/api/lists', { name: 'Batch Fail' }, token)
       const newListId = (await r1.json() as any).list.id
 
@@ -357,6 +365,147 @@ describe('Database Integration Tests', () => {
     it('DELETE on non-existent item returns 404', async () => {
       const res = await req('DELETE', `/api/lists/${listId}/items/99999`, null, token)
       expect(res.status).toBe(404)
+    })
+  })
+
+  describe('Plan Quota Limits', () => {
+    it('Allows creating 1 owned list for free user with 0 owned lists', async () => {
+      const user = await db.prepare("INSERT INTO users (login_id, display_name, password_hash) VALUES ('quota0', 'Quota0', 'hash') RETURNING *").first()
+      const token = await new AuthService(db).createSession(user.id)
+
+      const res = await req('POST', '/api/lists', { name: 'My List 1' }, token)
+      expect(res.status).toBe(201)
+      const data: any = await res.json()
+      expect(data.success).toBe(true)
+      expect(data.list.name).toBe('My List 1')
+    })
+
+    it('Rejects 2nd list creation for user with 1 owned list with 403 OWNED_LIST_LIMIT_REACHED', async () => {
+      await req('POST', '/api/auth/register', { login_id: 'quota1', display_name: 'Quota1', password: 'password123' })
+      const loginRes = await req('POST', '/api/auth/login', { login_id: 'quota1', password: 'password123' })
+      const token = loginRes.headers.get('set-cookie')?.split(';')[0].split('=')[1] || ''
+
+      const res = await req('POST', '/api/lists', { name: 'My List 2' }, token)
+      expect(res.status).toBe(403)
+      const data: any = await res.json()
+      expect(data.success).toBe(false)
+      expect(data.code).toBe('OWNED_LIST_LIMIT_REACHED')
+      expect(data.current).toBe(1)
+      expect(data.limit).toBe(1)
+    })
+
+    it('Allows user with 0 owned lists + multiple shared lists to create an owned list', async () => {
+      await req('POST', '/api/auth/register', { login_id: 'owner_user', display_name: 'Owner', password: 'password123' })
+      const loginRes1 = await req('POST', '/api/auth/login', { login_id: 'owner_user', password: 'password123' })
+      const token1 = loginRes1.headers.get('set-cookie')?.split(';')[0].split('=')[1] || ''
+      const ownerList = await db.prepare('SELECT id FROM shopping_lists').first()
+
+      const user2 = await db.prepare("INSERT INTO users (login_id, display_name, password_hash) VALUES ('member_only', 'Member', 'hash') RETURNING *").first()
+      const token2 = await new AuthService(db).createSession(user2.id)
+
+      const inviteRes = await req('POST', `/api/lists/${ownerList.id}/invites`, {}, token1)
+      const inviteData: any = await inviteRes.json()
+      const acceptRes = await req('POST', '/api/invites/accept', { token: inviteData.token }, token2)
+      expect(acceptRes.status).toBe(200)
+
+      const createRes = await req('POST', '/api/lists', { name: 'Member Own List' }, token2)
+      expect(createRes.status).toBe(201)
+    })
+
+    it('Rejects new owned list creation for user with 1 owned list + multiple shared lists', async () => {
+      await req('POST', '/api/auth/register', { login_id: 'user1', display_name: 'U1', password: 'password123' })
+      const r1 = await req('POST', '/api/auth/login', { login_id: 'user1', password: 'password123' })
+      const t1 = r1.headers.get('set-cookie')?.split(';')[0].split('=')[1] || ''
+      const user1 = await db.prepare("SELECT id FROM users WHERE login_id = ?").bind('user1').first()
+      const list1 = await db.prepare("SELECT id FROM shopping_lists WHERE created_by_user_id = ?").bind(user1.id).first()
+
+      await req('POST', '/api/auth/register', { login_id: 'user2', display_name: 'U2', password: 'password123' })
+      const r2 = await req('POST', '/api/auth/login', { login_id: 'user2', password: 'password123' })
+      const t2 = r2.headers.get('set-cookie')?.split(';')[0].split('=')[1] || ''
+
+      const invRes = await req('POST', `/api/lists/${list1.id}/invites`, {}, t1)
+      const invData: any = await invRes.json()
+      await req('POST', '/api/invites/accept', { token: invData.token }, t2)
+
+      const res = await req('POST', '/api/lists', { name: 'Extra List' }, t2)
+      expect(res.status).toBe(403)
+      const data: any = await res.json()
+      expect(data.code).toBe('OWNED_LIST_LIMIT_REACHED')
+    })
+
+    it('Allows creating owned list again after deleting owned list', async () => {
+      await req('POST', '/api/auth/register', { login_id: 'del_user', display_name: 'DelUser', password: 'password123' })
+      const r = await req('POST', '/api/auth/login', { login_id: 'del_user', password: 'password123' })
+      const t = r.headers.get('set-cookie')?.split(';')[0].split('=')[1] || ''
+      const user = await db.prepare("SELECT id FROM users WHERE login_id = 'del_user'").first()
+      const list = await db.prepare("SELECT id FROM shopping_lists WHERE created_by_user_id = ?").bind(user.id).first()
+
+      const res1 = await req('POST', '/api/lists', { name: 'List 2' }, t)
+      expect(res1.status).toBe(403)
+
+      const delRes = await req('DELETE', `/api/lists/${list.id}`, null, t)
+      expect(delRes.status).toBe(200)
+
+      const res2 = await req('POST', '/api/lists', { name: 'New List' }, t)
+      expect(res2.status).toBe(201)
+    })
+
+    it('Leaving shared list does NOT affect owned list quota', async () => {
+      await req('POST', '/api/auth/register', { login_id: 'owner_leave', display_name: 'Owner', password: 'password123' })
+      const r1 = await req('POST', '/api/auth/login', { login_id: 'owner_leave', password: 'password123' })
+      const t1 = r1.headers.get('set-cookie')?.split(';')[0].split('=')[1] || ''
+      const ownerUser = await db.prepare("SELECT id FROM users WHERE login_id = 'owner_leave'").first()
+      const list1 = await db.prepare("SELECT id FROM shopping_lists WHERE created_by_user_id = ?").bind(ownerUser.id).first()
+
+      await req('POST', '/api/auth/register', { login_id: 'member_leave', display_name: 'Member', password: 'password123' })
+      const r2 = await req('POST', '/api/auth/login', { login_id: 'member_leave', password: 'password123' })
+      const t2 = r2.headers.get('set-cookie')?.split(';')[0].split('=')[1] || ''
+
+      const invRes = await req('POST', `/api/lists/${list1.id}/invites`, {}, t1)
+      const invData: any = await invRes.json()
+      await req('POST', '/api/invites/accept', { token: invData.token }, t2)
+
+      const leaveRes = await req('DELETE', `/api/lists/${list1.id}/leave`, null, t2)
+      expect(leaveRes.status).toBe(200)
+
+      const createRes = await req('POST', '/api/lists', { name: 'Extra' }, t2)
+      expect(createRes.status).toBe(403)
+    })
+
+    it('Accepting invite succeeds regardless of owned list quota', async () => {
+      await req('POST', '/api/auth/register', { login_id: 'owner_invite', display_name: 'Owner', password: 'password123' })
+      const r1 = await req('POST', '/api/auth/login', { login_id: 'owner_invite', password: 'password123' })
+      const t1 = r1.headers.get('set-cookie')?.split(';')[0].split('=')[1] || ''
+      const ownerUser = await db.prepare("SELECT id FROM users WHERE login_id = 'owner_invite'").first()
+      const list1 = await db.prepare("SELECT id FROM shopping_lists WHERE created_by_user_id = ?").bind(ownerUser.id).first()
+
+      await req('POST', '/api/auth/register', { login_id: 'full_member', display_name: 'Member', password: 'password123' })
+      const r2 = await req('POST', '/api/auth/login', { login_id: 'full_member', password: 'password123' })
+      const t2 = r2.headers.get('set-cookie')?.split(';')[0].split('=')[1] || ''
+
+      const invRes = await req('POST', `/api/lists/${list1.id}/invites`, {}, t1)
+      const invData: any = await invRes.json()
+      const acceptRes = await req('POST', '/api/invites/accept', { token: invData.token }, t2)
+      expect(acceptRes.status).toBe(200)
+    })
+
+    it('Retains existing user data with 2+ owned lists but blocks new creation', async () => {
+      const user = await db.prepare("INSERT INTO users (login_id, display_name, password_hash) VALUES ('legacy', 'Legacy', 'hash') RETURNING *").first()
+      const token = await new AuthService(db).createSession(user.id)
+      
+      const l1 = await db.prepare("INSERT INTO shopping_lists (name, created_by_user_id) VALUES ('List 1', ?) RETURNING *").bind(user.id).first()
+      const l2 = await db.prepare("INSERT INTO shopping_lists (name, created_by_user_id) VALUES ('List 2', ?) RETURNING *").bind(user.id).first()
+      await db.prepare("INSERT INTO list_members (list_id, user_id, role) VALUES (?, ?, 'owner')").bind(l1.id, user.id).run()
+      await db.prepare("INSERT INTO list_members (list_id, user_id, role) VALUES (?, ?, 'owner')").bind(l2.id, user.id).run()
+
+      const userListsRes = await req('GET', '/api/lists', null, token)
+      const userListsData: any = await userListsRes.json()
+      expect(userListsData.lists).toHaveLength(2)
+
+      const createRes = await req('POST', '/api/lists', { name: 'List 3' }, token)
+      expect(createRes.status).toBe(403)
+      const errData: any = await createRes.json()
+      expect(errData.code).toBe('OWNED_LIST_LIMIT_REACHED')
     })
   })
 })

@@ -60,13 +60,14 @@ app.get('/', async (c) => {
 
   const listService = new ListService(c.env.DB)
   const lists = await listService.getUserLists(user.id)
+  const listQuota = await listService.getListQuota(user.id)
   
   if (lists.length > 0) {
     return c.redirect(`/lists/${lists[0].id}`)
   } else {
     // If user has no lists, show a friendly page prompting to create one
     const EmptyListPage = () => (
-      <Layout title="ホーム" user={user} lists={[]}>
+      <Layout title="ホーム" user={user} lists={[]} listQuota={listQuota}>
         <div class="empty-state" style="margin: 3rem auto; max-width: 500px;">
           <svg width="120" height="120" viewBox="0 0 180 160" fill="none" xmlns="http://www.w3.org/2000/svg">
             <ellipse cx="90" cy="135" rx="70" ry="12" fill="#E7E3DF" opacity="0.6" />
@@ -126,6 +127,7 @@ app.get('/lists/:listId', async (c) => {
   const listService = new ListService(c.env.DB)
   const lists = await listService.getUserLists(user.id)
   const currentList = await listService.getListById(listId)
+  const listQuota = await listService.getListQuota(user.id)
   
   if (!currentList) return c.redirect('/')
 
@@ -136,6 +138,7 @@ app.get('/lists/:listId', async (c) => {
     members={[]} 
     role={member.role as 'owner'|'member'} 
     cloudName={c.env.CLOUD_NAME} 
+    listQuota={listQuota}
   />)
 })
 

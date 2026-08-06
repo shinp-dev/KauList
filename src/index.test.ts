@@ -4,7 +4,9 @@ import { createD1Mock } from './test-utils/d1-mock'
 import { jsx } from 'hono/jsx'
 import app from './index'
 import { AuthService } from './modules/auth/service'
+import { ListService } from './modules/lists/service'
 import { Layout } from './components/Layout'
+import { createOwnedListLimitMessage } from './config/planLimits'
 
 const schemaPath = join(process.cwd(), 'schema.sql')
 
@@ -509,6 +511,10 @@ describe('Database Integration Tests', () => {
       expect(errData.code).toBe('OWNED_LIST_LIMIT_REACHED')
     })
 
+    // Guarantee Scope Note:
+    // The in-memory DatabaseSync mock executes SQL synchronously.
+    // This verifies application-level behavior and final consistency (interleaved execution),
+    // but does not fully reproduce concurrent Cloudflare D1 connections over network.
     it('Concurrent POST /api/lists requests for user with 0 owned lists resulting in 1 success (201) and 1 limit error (403)', async () => {
       const user = await db.prepare("INSERT INTO users (login_id, display_name, password_hash) VALUES ('concurrent_user', 'Concurrent', 'hash') RETURNING *").first()
       const token = await new AuthService(db).createSession(user.id)
@@ -549,19 +555,49 @@ describe('Database Integration Tests', () => {
       expect(orphanLists.results).toHaveLength(0)
     })
 
-    it('Layout component disables create button when user has 1 owned list', () => {
-      const user = { id: 10, display_name: 'TestUser' }
-      const lists = [{ id: 100, name: 'My List', created_by_user_id: 10, deleted_at: null }]
-      const htmlOutput = Layout({ title: 'Test', user, lists }).toString()
-      expect(htmlOutput).toContain('disabled')
-      expect(htmlOutput).toContain('title="無料プランでは、自分のリストを1つまで作成できます。')
+    it('createOwnedListLimitMessage dynamically generates limit string without hardcoding 1', () => {
+      expect(createOwnedListLimitMessage(1)).toBe('無料プランでは、自分のリストを1つまで作成できます。')
+      expect(createOwnedListLimitMessage(5)).toBe('無料プランでは、自分のリストを5つまで作成できます。')
     })
 
-    it('Layout component enables create button when user has 0 owned lists (even with shared lists)', () => {
+    it('ListService.getListQuota returns server-calculated current, limit, and canCreate', async () => {
+      const user = await db.prepare("INSERT INTO users (login_id, display_name, password_hash) VALUES ('quota_test', 'QuotaTest', 'hash') RETURNING *").first()
+      const listService = new ListService(db)
+
+      const quota1 = await listService.getListQuota(user.id)
+      expect(quota1).toEqual({ current: 0, limit: 1, canCreate: true })
+
+      await listService.createList('List 1', user.id)
+
+      const quota2 = await listService.getListQuota(user.id)
+      expect(quota2).toEqual({ current: 1, limit: 1, canCreate: false })
+    })
+
+    it('Layout component targets #btn-create-list-dialog specifically for disabled attribute when limit reached', () => {
+      const user = { id: 10, display_name: 'TestUser' }
+      const lists = [{ id: 100, name: 'My List', created_by_user_id: 10, deleted_at: null }]
+      const listQuota = { current: 1, limit: 1, canCreate: false }
+
+      const htmlOutput = Layout({ title: 'Test', user, lists, listQuota }).toString()
+
+      const createBtnMatch = htmlOutput.match(/<button[^>]*id="btn-create-list-dialog"[^>]*>/)
+      expect(createBtnMatch).not.toBeNull()
+      expect(createBtnMatch![0]).toContain('disabled')
+      expect(htmlOutput).toContain('id="list-quota-message"')
+      expect(htmlOutput).toContain('1 / 1')
+    })
+
+    it('Layout component enables #btn-create-list-dialog when listQuota.canCreate is true (even with custom limit)', () => {
       const user = { id: 10, display_name: 'TestUser' }
       const lists = [{ id: 100, name: 'Shared List', created_by_user_id: 99, deleted_at: null }]
-      const htmlOutput = Layout({ title: 'Test', user, lists }).toString()
-      expect(htmlOutput).not.toContain('disabled')
+      const listQuota = { current: 1, limit: 5, canCreate: true }
+
+      const htmlOutput = Layout({ title: 'Test', user, lists, listQuota }).toString()
+
+      const createBtnMatch = htmlOutput.match(/<button[^>]*id="btn-create-list-dialog"[^>]*>/)
+      expect(createBtnMatch).not.toBeNull()
+      expect(createBtnMatch![0]).not.toContain('disabled')
+      expect(htmlOutput).toContain('1 / 5')
     })
   })
 })

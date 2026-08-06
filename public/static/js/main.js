@@ -191,7 +191,10 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = '/lists/' + json.list.id
       } catch (err) {
         if (err.code === 'OWNED_LIST_LIMIT_REACHED') {
-          alert('無料プランでは、自分のリストを1つまで作成できます。\n\n新しいリストを作るには、現在のリストを削除してください。\n（※共有されたリストへの参加数に上限はありません）')
+          const current = err.data?.current
+          const limit = err.data?.limit
+          const quotaInfo = (current !== undefined && limit !== undefined) ? `\n現在の所有リスト数: ${current} / ${limit}` : ''
+          alert(`${err.message}${quotaInfo}\n\n新しいリストを作るには、現在のリストを削除してください。\n（※共有されたリストへの参加数に上限はありません）`)
         } else {
           alert(err.message)
         }

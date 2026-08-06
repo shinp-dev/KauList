@@ -1,6 +1,7 @@
 import { jsx } from 'hono/jsx'
 import { Layout } from './Layout'
 import { ShareIcon, MoreVerticalIcon, PencilIcon, UsersIcon, TrashIcon, PlusIcon, ImageIcon, XIcon } from './CowAssets'
+import type { ListQuota } from '../config/planLimits'
 
 export const ShoppingListPage = (props: {
   user: any
@@ -9,9 +10,10 @@ export const ShoppingListPage = (props: {
   members: any[]
   role: 'owner' | 'member'
   cloudName: string
+  listQuota?: ListQuota
 }) => {
   return (
-    <Layout title={props.currentList.name} user={props.user} lists={props.lists} currentListId={props.currentList.id}>
+    <Layout title={props.currentList.name} user={props.user} lists={props.lists} currentListId={props.currentList.id} listQuota={props.listQuota}>
       
       {/* Dataset bridge to client-side JS */}
       <div id="app-data" 

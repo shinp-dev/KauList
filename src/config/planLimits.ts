@@ -1,21 +1,28 @@
-export const PLAN_LIMITS = {
-  free: {
-    ownedLists: 1,
-  },
-} as const
+export type PlanName = 'free'
 
-export type PlanName = keyof typeof PLAN_LIMITS
+export type ListQuota = {
+  current: number
+  limit: number
+  canCreate: boolean
+}
 
 export const DEFAULT_PLAN: PlanName = 'free'
 
-export class OwnedListLimitError extends Error {
-  code = 'OWNED_LIST_LIMIT_REACHED' as const
+export const PLAN_LIMITS: Record<PlanName, { ownedLists: number }> = {
+  free: {
+    ownedLists: 1
+  }
+}
 
-  constructor(
-    public current: number,
-    public limit: number
-  ) {
-    super('無料プランでは自分のリストを1つまで作成できます')
+export const createOwnedListLimitMessage = (limit: number): string => {
+  return `無料プランでは、自分のリストを${limit}つまで作成できます。`
+}
+
+export class OwnedListLimitError extends Error {
+  public code = 'OWNED_LIST_LIMIT_REACHED'
+
+  constructor(public current: number, public limit: number) {
+    super(createOwnedListLimitMessage(limit))
     this.name = 'OwnedListLimitError'
   }
 }

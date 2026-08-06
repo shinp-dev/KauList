@@ -1,7 +1,7 @@
 import type { ShoppingList } from '../../types'
 import { ListRepository } from './repository'
 import { MemberRepository } from '../members/repository'
-import { PLAN_LIMITS, DEFAULT_PLAN, OwnedListLimitError, type PlanName } from '../../config/planLimits'
+import { PLAN_LIMITS, DEFAULT_PLAN, OwnedListLimitError, type PlanName, type ListQuota } from '../../config/planLimits'
 
 export class ListService {
   private listRepo: ListRepository
@@ -22,6 +22,16 @@ export class ListService {
 
   async countOwnedLists(userId: number): Promise<number> {
     return await this.listRepo.countOwnedLists(userId)
+  }
+
+  async getListQuota(userId: number, planName: PlanName = DEFAULT_PLAN): Promise<ListQuota> {
+    const current = await this.listRepo.countOwnedLists(userId)
+    const limit = PLAN_LIMITS[planName].ownedLists
+    return {
+      current,
+      limit,
+      canCreate: current < limit
+    }
   }
 
   async createList(name: string, userId: number, planName: PlanName = DEFAULT_PLAN): Promise<ShoppingList> {

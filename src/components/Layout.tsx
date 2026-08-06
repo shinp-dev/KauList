@@ -1,4 +1,10 @@
 import { html } from 'hono/html'
+import {
+  PLAN_LIMITS,
+  DEFAULT_PLAN,
+  createOwnedListLimitMessage,
+  type ListQuota
+} from '../config/planLimits'
 
 const SITE_DOMAIN = 'https://kaulist.shinp-studio.com'
 
@@ -10,15 +16,28 @@ export const Layout = (props: {
   currentListId?: number
   canonicalUrl?: string
   ogImageUrl?: string
+  listQuota?: ListQuota
 }) => {
   const canonical = props.canonicalUrl || SITE_DOMAIN
   const ogImage = props.ogImageUrl || `${SITE_DOMAIN}/assets/icon.png`
 
-  const ownedListCount = props.user && props.lists
-    ? props.lists.filter((l: any) => l.created_by_user_id === props.user.id && !l.deleted_at).length
-    : 0
-  const isLimitReached = ownedListCount >= 1
-  const limitTitle = "無料プランでは、自分のリストを1つまで作成できます。新しいリストを作るには、現在の所有リストを削除してください。"
+  // Use listQuota from server props, or fallback to server DEFAULT_PLAN logic
+  const quota = props.listQuota || (() => {
+    const ownedCount = props.user && props.lists
+      ? props.lists.filter((l: any) => l.created_by_user_id === props.user.id && !l.deleted_at).length
+      : 0
+    const limit = PLAN_LIMITS[DEFAULT_PLAN].ownedLists
+    return {
+      current: ownedCount,
+      limit,
+      canCreate: ownedCount < limit
+    }
+  })()
+
+  const limit = quota.limit
+  const current = quota.current
+  const canCreate = quota.canCreate
+  const limitMsg = createOwnedListLimitMessage(limit)
 
   return html`<!DOCTYPE html>
 <html lang="ja">
@@ -59,11 +78,15 @@ export const Layout = (props: {
           ` : ''}
 
           <div class="header-actions">
+            <div id="list-quota-message" style="font-size: 0.75rem; color: var(--color-text-muted); font-weight: 600; padding: 0.2rem 0.45rem; background: var(--color-background); border-radius: var(--radius-sm); border: 1px solid var(--color-border); display: inline-flex; align-items: center; gap: 0.25rem;" aria-label="所有リスト数">
+              <span>所有リスト</span>
+              <span style="color: ${!canCreate ? 'var(--color-danger)' : 'var(--color-text)'}; font-weight: 700;">${current} / ${limit}</span>
+            </div>
             <button
               id="btn-create-list-dialog"
               class="btn btn-secondary btn-sm"
               style="padding: 0.3rem 0.55rem; height: 32px;"
-              ${isLimitReached ? html`disabled title="${limitTitle}"` : ''}
+              ${!canCreate ? html`disabled aria-describedby="list-quota-message" title="${limitMsg}新しいリストを作るには、現在の所有リストを削除してください。"` : ''}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
               <span>新規</span>
@@ -102,7 +125,7 @@ export const Layout = (props: {
       </button>
     </div>
     <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 0 0 0.85rem 0; line-height: 1.4;">
-      無料プランでは、自分のリストを1つまで作成できます。<br />(※共有されたリストへの参加数に上限はありません)
+      ${limitMsg}<br />(※共有されたリストへの参加数に上限はありません)
     </p>
     <form id="create-list-form" style="display: flex; flex-direction: column; gap: 0.85rem;">
       <div class="form-group">

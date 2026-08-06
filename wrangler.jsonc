@@ -1,6 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "kaulist",
+	"name": "family-shopper",
 	"compatibility_date": "2026-03-16",
 	"pages_build_output_dir": "./dist",
 	"compatibility_flags": [
@@ -14,7 +14,7 @@
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "kaulist-db",
+			"database_name": "family-shopper-db",
 			"database_id": "9cee6cb3-d011-4e01-86f8-b15c4b479bc7"
 		}
 	]

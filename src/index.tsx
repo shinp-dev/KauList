@@ -16,6 +16,7 @@ import { LoginPage, RegisterPage } from './components/AuthPages'
 import { ShoppingListPage } from './components/ShoppingListPage'
 import { JoinPage } from './components/JoinPage'
 import { Layout } from './components/Layout'
+import { LandingPage } from './components/LandingPage'
 
 const app = new Hono<{ Bindings: Bindings, Variables: Variables }>()
 
@@ -55,7 +56,7 @@ app.use(async (c, next) => {
 // Frontend Routes
 app.get('/', async (c) => {
   const user = c.get('user')
-  if (!user) return c.redirect('/login')
+  if (!user) return c.html(<LandingPage />)
 
   const listService = new ListService(c.env.DB)
   const lists = await listService.getUserLists(user.id)
@@ -63,18 +64,38 @@ app.get('/', async (c) => {
   if (lists.length > 0) {
     return c.redirect(`/lists/${lists[0].id}`)
   } else {
-    // If user has no lists (e.g. left all lists), show a page prompting to create one
+    // If user has no lists, show a friendly page prompting to create one
     const EmptyListPage = () => (
       <Layout title="ホーム" user={user} lists={[]}>
-        <div style="text-align: center; padding: 4rem 2rem;">
-          <h2>参加しているリストがありません</h2>
-          <p style="color: var(--text-light); margin-bottom: 2rem;">新しいリストを作成するか、招待リンクから参加してください。</p>
-          <button class="btn-primary" onclick="document.getElementById('create-list-dialog').showModal()">新しいリストを作成する</button>
+        <div class="empty-state" style="margin: 3rem auto; max-width: 500px;">
+          <svg width="120" height="120" viewBox="0 0 180 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="90" cy="135" rx="70" ry="12" fill="#E7E3DF" opacity="0.6" />
+            <ellipse cx="90" cy="110" rx="38" ry="32" fill="#FFFFFF" stroke="#222222" stroke-width="3" />
+            <path d="M70 95C80 95 86 105 78 115C70 125 60 118 58 108C56 98 62 95 70 95Z" fill="#222222" />
+            <path d="M64 42C59 34 63 26 69 28C74 30 73 37 73 37" stroke="#D98A56" stroke-width="2.5" stroke-linecap="round" fill="#F4A261" />
+            <path d="M116 42C121 34 117 26 111 28C106 30 107 37 107 37" stroke="#D98A56" stroke-width="2.5" stroke-linecap="round" fill="#F4A261" />
+            <ellipse cx="90" cy="58" rx="30" ry="24" fill="#FFFFFF" stroke="#222222" stroke-width="3" />
+            <path d="M96 36C108 36 117 44 114 53C111 60 100 57 96 50C92 43 89 36 96 36Z" fill="#222222" />
+            <ellipse cx="58" cy="50" rx="9" ry="5" fill="#FFFFFF" stroke="#222222" stroke-width="2.5" transform="rotate(-20 58 50)" />
+            <ellipse cx="122" cy="50" rx="9" ry="5" fill="#FFFFFF" stroke="#222222" stroke-width="2.5" transform="rotate(20 122 50)" />
+            <path d="M74 53C76 50 80 50 82 53" stroke="#222222" stroke-width="2.5" stroke-linecap="round" fill="none" />
+            <path d="M98 53C100 50 104 50 106 53" stroke="#222222" stroke-width="2.5" stroke-linecap="round" fill="none" />
+            <ellipse cx="90" cy="67" rx="16" ry="10" fill="#FFC6C7" stroke="#222222" stroke-width="2.5" />
+            <ellipse cx="84" cy="65" rx="1.8" ry="2.5" fill="#555555" />
+            <ellipse cx="96" cy="65" rx="1.8" ry="2.5" fill="#555555" />
+          </svg>
+          <div class="empty-state-title">参加しているリストがありません</div>
+          <div class="empty-state-desc">新しいリストを作成するか、共有招待リンクから参加してください。</div>
+          <button class="btn btn-primary" onclick="document.getElementById('create-list-dialog').showModal()">＋ 新しいリストを作成する</button>
         </div>
       </Layout>
     )
     return c.html(<EmptyListPage />)
   }
+})
+
+app.get('/lp', (c) => {
+  return c.html(<LandingPage />)
 })
 
 app.get('/login', (c) => {

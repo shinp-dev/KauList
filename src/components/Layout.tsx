@@ -1,5 +1,5 @@
 import { html } from 'hono/html'
-import { jsx } from 'hono/jsx'
+import { CowLogoIcon } from './CowAssets'
 
 export const Layout = (props: { title: string, children?: any, user?: any, lists?: any[], currentListId?: number }) => {
   return html`<!DOCTYPE html>
@@ -7,112 +7,54 @@ export const Layout = (props: { title: string, children?: any, user?: any, lists
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${props.title} - Shared Shopper</title>
-  <style>
-    :root {
-      --primary: #4F46E5;
-      --primary-hover: #4338CA;
-      --bg: #F9FAFB;
-      --surface: #FFFFFF;
-      --text: #111827;
-      --text-light: #6B7280;
-      --border: #E5E7EB;
-      --danger: #EF4444;
-      --success: #10B981;
-    }
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background-color: var(--bg);
-      color: var(--text);
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-    }
-    header {
-      background-color: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 1rem 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .header-left {
-      display: flex;
-      align-items: center;
-      gap: 1.5rem;
-    }
-    .logo {
-      font-weight: bold;
-      font-size: 1.25rem;
-      color: var(--primary);
-      text-decoration: none;
-    }
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-    .main-container {
-      flex: 1;
-      max-width: 1000px;
-      margin: 2rem auto;
-      width: 100%;
-      padding: 0 1rem;
-    }
-    .card {
-      background: var(--surface);
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
-    }
-    input, select, button {
-      font-family: inherit;
-      font-size: 1rem;
-      padding: 0.5rem;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-    }
-    button {
-      cursor: pointer;
-      background: var(--surface);
-      border: 1px solid var(--border);
-    }
-    .btn-primary {
-      background: var(--primary);
-      color: white;
-      border: none;
-    }
-    .btn-primary:hover {
-      background: var(--primary-hover);
-    }
-    .btn-danger {
-      background: var(--danger);
-      color: white;
-      border: none;
-    }
-  </style>
+  <title>${props.title} - KauList</title>
+  <link rel="stylesheet" href="/style.css">
   <script src="/static/js/main.js" defer></script>
 </head>
-<body>
+<body class="cow-bg-accent">
   ${props.user ? html`
-    <header>
-      <div class="header-left">
-        <a href="/" class="logo">Shared Shopper</a>
-        ${props.lists && props.lists.length > 0 ? html`
-          <select id="list-switcher" onchange="window.location.href='/lists/' + this.value">
-            ${props.lists.map((l: any) => html`
-              <option value="${l.id}" ${l.id === props.currentListId ? 'selected' : ''}>${l.name}</option>
-            `)}
-          </select>
-        ` : ''}
-        <button id="btn-create-list-dialog" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">＋ 新規リスト</button>
-      </div>
-      <div class="header-right">
-        <span>${props.user.display_name}</span>
-        <button id="logout-btn">ログアウト</button>
+    <header class="site-header">
+      <div class="header-container">
+        <div class="header-left" style="display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;">
+          <a href="/" class="brand-logo">
+            <svg width="32" height="32" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="24" cy="24" r="22" fill="#EEF3FF"/>
+              <path d="M12 16C10 13 11 9 14 10C16 11 16 14 16 14" stroke="#D98A56" stroke-width="2.5" stroke-linecap="round" fill="#F4A261"/>
+              <path d="M36 16C38 13 37 9 34 10C32 11 32 14 32 14" stroke="#D98A56" stroke-width="2.5" stroke-linecap="round" fill="#F4A261"/>
+              <ellipse cx="24" cy="24" rx="14" ry="12" fill="#FFFFFF" stroke="#222222" stroke-width="2.5"/>
+              <ellipse cx="9" cy="20" rx="4" ry="2.5" fill="#FFFFFF" stroke="#222222" stroke-width="2" transform="rotate(-20 9 20)"/>
+              <ellipse cx="39" cy="20" rx="4" ry="2.5" fill="#FFFFFF" stroke="#222222" stroke-width="2" transform="rotate(20 39 20)"/>
+              <ellipse cx="9" cy="20" rx="2.5" ry="1.5" fill="#FFB7B2" transform="rotate(-20 9 20)"/>
+              <ellipse cx="39" cy="20" rx="2.5" ry="1.5" fill="#FFB7B2" transform="rotate(20 39 20)"/>
+              <path d="M27 14C31 14 35 17 34 21C33 24 29 23 27 20C26 17 25 14 27 14Z" fill="#222222"/>
+              <circle cx="18" cy="21" r="2" fill="#222222"/>
+              <circle cx="30" cy="21" r="2" fill="#222222"/>
+              <circle cx="18.5" cy="20.5" r="0.7" fill="#FFFFFF"/>
+              <circle cx="30.5" cy="20.5" r="0.7" fill="#FFFFFF"/>
+              <ellipse cx="24" cy="28" rx="8.5" ry="5.5" fill="#FFC6C7" stroke="#222222" stroke-width="2"/>
+              <ellipse cx="21" cy="27.5" rx="1.2" ry="1.8" fill="#555555"/>
+              <ellipse cx="27" cy="27.5" rx="1.2" ry="1.8" fill="#555555"/>
+              <path d="M22.5 30.5C23.5 31.2 24.5 31.2 25.5 30.5" stroke="#222222" stroke-width="1.5" stroke-linecap="round"/>
+              <rect x="29" y="29" width="13" height="13" rx="3" fill="#4C6FFF" stroke="#FFFFFF" stroke-width="1.5"/>
+              <path d="M33 29V27C33 25.5 34 24.5 35.5 24.5C37 24.5 38 25.5 38 27V29" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <span>KauList</span>
+          </a>
+          ${props.lists && props.lists.length > 0 ? html`
+            <select id="list-switcher" class="form-control" style="width: auto; padding: 0.4rem 2.2rem 0.4rem 0.85rem; font-size: 0.9rem; font-weight: 700;" onchange="window.location.href='/lists/' + this.value">
+              ${props.lists.map((l: any) => html`
+                <option value="${l.id}" ${l.id === props.currentListId ? 'selected' : ''}>${l.name}</option>
+              `)}
+            </select>
+          ` : ''}
+          <button id="btn-create-list-dialog" class="btn btn-secondary btn-sm">＋ 新規リスト</button>
+        </div>
+        <div class="header-right" style="display: flex; align-items: center; gap: 0.85rem;">
+          <span style="font-size: 0.9rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 0.4rem; background: var(--bg-subtle); padding: 0.35rem 0.75rem; border-radius: var(--radius-pill); border: 1px solid var(--border);">
+            🐮 ${props.user.display_name}
+          </span>
+          <button id="logout-btn" class="btn btn-ghost btn-sm">ログアウト</button>
+        </div>
       </div>
     </header>
   ` : ''}
@@ -121,16 +63,19 @@ export const Layout = (props: { title: string, children?: any, user?: any, lists
     ${props.children}
   </main>
   
-  <dialog id="create-list-dialog" style="border: none; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 1.5rem; max-width: 400px; width: 100%;">
-    <h3 style="margin-top: 0;">新規リスト作成</h3>
-    <form id="create-list-form" style="display: flex; flex-direction: column; gap: 1rem;">
-      <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-        <label for="new-list-name">リスト名</label>
-        <input type="text" id="new-list-name" required maxlength="50" />
+  <dialog id="create-list-dialog">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+      <h3 style="font-size: 1.15rem; margin: 0;">新規リスト作成</h3>
+      <button type="button" id="btn-close-create-list" class="btn btn-ghost btn-sm" style="padding: 0.2rem 0.5rem; font-size: 1.1rem;">✕</button>
+    </div>
+    <form id="create-list-form" style="display: flex; flex-direction: column; gap: 1.25rem;">
+      <div class="form-group">
+        <label for="new-list-name" class="form-label">リスト名</label>
+        <input type="text" id="new-list-name" class="form-control" placeholder="例: 週末のお買い物、ドラッグストア" required maxlength="50" />
       </div>
-      <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem;">
-        <button type="button" id="btn-close-create-list">キャンセル</button>
-        <button type="submit" class="btn-primary">作成</button>
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+        <button type="button" onclick="document.getElementById('create-list-dialog').close()" class="btn btn-secondary">キャンセル</button>
+        <button type="submit" class="btn btn-primary">作成する</button>
       </div>
     </form>
   </dialog>

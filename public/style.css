@@ -44,17 +44,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Subtle background cow spot accents at top-right and bottom-left ONLY */
+/* Organic Cow Spot Background Accents (Top-Right & Bottom-Left ONLY, minimal count & low opacity) */
 body::before {
   content: "";
   position: fixed;
-  top: -40px;
-  right: -40px;
-  width: 220px;
-  height: 200px;
-  background: 
-    radial-gradient(ellipse at 60% 40%, rgba(37, 37, 37, 0.03) 0%, rgba(37, 37, 37, 0.03) 55%, transparent 56%),
-    radial-gradient(ellipse at 25% 65%, rgba(37, 37, 37, 0.02) 0%, rgba(37, 37, 37, 0.02) 45%, transparent 46%);
+  top: -30px;
+  right: -30px;
+  width: 260px;
+  height: 240px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cpath fill='%23252525' fill-opacity='0.025' d='M120,20 C160,10 190,40 180,90 C170,140 130,170 80,160 C40,150 10,110 30,60 C50,10 80,30 120,20 Z'/%3E%3Cpath fill='%23252525' fill-opacity='0.015' d='M30,130 C60,110 90,130 80,160 C70,185 40,190 20,170 C5,155 10,145 30,130 Z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: top right;
   pointer-events: none;
   z-index: 0;
 }
@@ -62,13 +62,13 @@ body::before {
 body::after {
   content: "";
   position: fixed;
-  bottom: -60px;
-  left: -60px;
-  width: 240px;
-  height: 220px;
-  background: 
-    radial-gradient(ellipse at 45% 50%, rgba(37, 37, 37, 0.025) 0%, rgba(37, 37, 37, 0.025) 55%, transparent 56%),
-    radial-gradient(ellipse at 75% 30%, rgba(37, 37, 37, 0.015) 0%, rgba(37, 37, 37, 0.015) 45%, transparent 46%);
+  bottom: -40px;
+  left: -40px;
+  width: 280px;
+  height: 250px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cpath fill='%23252525' fill-opacity='0.025' d='M70,30 C120,15 160,50 150,110 C140,160 90,185 40,170 C10,155 -10,110 10,60 C30,20 40,45 70,30 Z'/%3E%3Cpath fill='%23252525' fill-opacity='0.015' d='M140,40 C170,25 190,50 180,80 C170,105 140,100 130,80 C120,65 125,50 140,40 Z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: bottom left;
   pointer-events: none;
   z-index: 0;
 }

@@ -79,33 +79,53 @@ export const ShoppingListPage = (props: {
         </div>
       </div>
 
-      {/* Add Item Form Area (Custom Image File Picker UI) */}
+      {/* Add Item Form Area */}
       <div class="surface-card">
         <h3 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--color-text);">
           商品を追加
         </h3>
         
         <form id="item-form" style="display: flex; flex-direction: column; gap: 0.5rem;">
-          {/* Item Name */}
+          {/* Row 1: Item Name */}
           <div class="form-group">
             <label for="item-name" class="form-label">商品名</label>
             <input type="text" id="item-name" class="form-control" placeholder="例: 牛乳、食パン" required maxlength={100} />
           </div>
 
-          {/* Quantity & Unit in the SAME compact row */}
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+          {/* Row 2: Quantity & Unit (Select with Custom Option) in same row */}
+          <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 0.5rem;">
             <div class="form-group">
               <label for="item-count" class="form-label">数量</label>
               <input type="number" id="item-count" class="form-control" value="1" min="1" required />
             </div>
+            
             <div class="form-group">
-              <label for="item-unit" class="form-label">単位</label>
-              <input type="text" id="item-unit" class="form-control" value="個" placeholder="個" maxlength={20} required />
+              <label for="item-unit-select" class="form-label">単位</label>
+              <select id="item-unit-select" class="form-control" required>
+                <option value="個" selected>個</option>
+                <option value="本">本</option>
+                <option value="袋">袋</option>
+                <option value="パック">パック</option>
+                <option value="箱">箱</option>
+                <option value="枚">枚</option>
+                <option value="缶">缶</option>
+                <option value="瓶">瓶</option>
+                <option value="束">束</option>
+                <option value="組">組</option>
+                <option value="ケース">ケース</option>
+                <option value="冊">冊</option>
+                <option value="kg">kg</option>
+                <option value="g">g</option>
+                <option value="L">L</option>
+                <option value="mL">mL</option>
+                <option value="other">その他</option>
+              </select>
+              <input type="text" id="item-unit-custom" class="form-control" placeholder="単位を入力" maxlength={20} style="display: none; margin-top: 0.35rem;" />
             </div>
           </div>
 
-          {/* Category, Custom Image Upload Button, Submit Button */}
-          <div style="display: grid; grid-template-columns: 130px 1fr 90px; gap: 0.5rem; align-items: flex-end;" class="form-row-desktop">
+          {/* Row 3: Category, Custom Image Upload Button, Submit Button */}
+          <div style="display: grid; grid-template-columns: 120px 1fr 90px; gap: 0.5rem; align-items: flex-end;" class="form-row-desktop">
             <div class="form-group">
               <label for="item-category" class="form-label">カテゴリ</label>
               <select id="item-category" class="form-control" required>
@@ -119,15 +139,17 @@ export const ShoppingListPage = (props: {
             {/* Custom Image File Upload UI */}
             <div class="form-group" style="min-width: 0;">
               <label class="form-label">画像 (任意)</label>
-              <div style="display: flex; align-items: center; gap: 0.4rem; height: 35px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 0.2rem 0.5rem; overflow: hidden;">
+              <div style="display: flex; align-items: center; gap: 0.4rem; height: 35px; min-width: 0;">
                 <input type="file" id="item-image" accept="image/*" style="display: none;" />
-                <label for="item-image" class="btn btn-secondary btn-sm" style="cursor: pointer; height: 27px; padding: 0.2rem 0.55rem; font-size: 0.75rem; flex-shrink: 0;">
-                  <ImageIcon size={13} />
+                <label for="item-image" class="btn btn-secondary btn-sm" style="cursor: pointer; height: 35px; padding: 0.35rem 0.65rem; font-size: 0.8rem; flex-shrink: 0;">
+                  <ImageIcon size={14} />
                   <span id="item-image-btn-text">画像を選ぶ</span>
                 </label>
-                <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.775rem; min-width: 0; flex: 1;">
+                
+                {/* Visible ONLY when a file is selected */}
+                <div id="item-image-info" style="display: none; align-items: center; gap: 0.35rem; font-size: 0.775rem; min-width: 0; flex: 1; overflow: hidden; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 0.2rem 0.5rem; height: 35px;">
                   <img id="item-image-preview" style="display: none; width: 24px; height: 24px; border-radius: 4px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--color-border);" />
-                  <span id="item-image-filename" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-muted);">未選択</span>
+                  <span id="item-image-filename" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text);"></span>
                 </div>
               </div>
             </div>

@@ -18,15 +18,30 @@ document.addEventListener('DOMContentLoaded', () => {
   // Custom File Input UI Elements
   const fileInput = document.getElementById('item-image')
   const fileBtnText = document.getElementById('item-image-btn-text')
+  const fileInfoBox = document.getElementById('item-image-info')
   const fileFileName = document.getElementById('item-image-filename')
   const filePreview = document.getElementById('item-image-preview')
 
+  // Unit Select Elements
+  const unitSelect = document.getElementById('item-unit-select')
+  const unitCustomInput = document.getElementById('item-unit-custom')
+
+  if (unitSelect && unitCustomInput) {
+    unitSelect.addEventListener('change', () => {
+      if (unitSelect.value === 'other') {
+        unitCustomInput.style.display = 'block'
+        unitCustomInput.focus()
+      } else {
+        unitCustomInput.style.display = 'none'
+        unitCustomInput.value = ''
+      }
+    })
+  }
+
   const resetImageUI = () => {
     if (fileBtnText) fileBtnText.textContent = '画像を選ぶ'
-    if (fileFileName) {
-      fileFileName.textContent = '未選択'
-      fileFileName.style.color = 'var(--color-text-muted)'
-    }
+    if (fileInfoBox) fileInfoBox.style.display = 'none'
+    if (fileFileName) fileFileName.textContent = ''
     if (filePreview) {
       filePreview.style.display = 'none'
       filePreview.src = ''
@@ -38,10 +53,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const file = fileInput.files[0]
       if (file) {
         if (fileBtnText) fileBtnText.textContent = '画像を変更'
-        if (fileFileName) {
-          fileFileName.textContent = file.name
-          fileFileName.style.color = 'var(--color-text)'
-        }
+        if (fileInfoBox) fileInfoBox.style.display = 'flex'
+        if (fileFileName) fileFileName.textContent = file.name
+        
         if (file.type.startsWith('image/')) {
           const reader = new FileReader()
           reader.onload = (e) => {
@@ -345,7 +359,12 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const name = document.getElementById('item-name').value
         const count = parseInt(document.getElementById('item-count').value, 10)
-        const unit = document.getElementById('item-unit').value
+        
+        // Extract Unit: if "other", use custom input text
+        const unitSelectVal = unitSelect ? unitSelect.value : '個'
+        const customUnitVal = unitCustomInput ? unitCustomInput.value : ''
+        const unit = unitSelectVal === 'other' ? (customUnitVal.trim() || '個') : unitSelectVal
+        
         const category = document.getElementById('item-category').value
         const file = fileInput ? fileInput.files[0] : null
         
@@ -416,7 +435,11 @@ document.addEventListener('DOMContentLoaded', () => {
           })
           itemForm.reset()
           document.getElementById('item-count').value = "1"
-          document.getElementById('item-unit').value = "個"
+          if (unitSelect) unitSelect.value = "個"
+          if (unitCustomInput) {
+            unitCustomInput.style.display = "none"
+            unitCustomInput.value = ""
+          }
           resetImageUI()
           loadItems()
         } catch (err) {

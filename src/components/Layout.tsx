@@ -1,43 +1,48 @@
 import { html } from 'hono/html'
 import {
-  PLAN_LIMITS,
-  DEFAULT_PLAN,
   createOwnedListLimitMessage,
   type ListQuota
 } from '../config/planLimits'
 
 const SITE_DOMAIN = 'https://kaulist.shinp-studio.com'
 
-export const Layout = (props: {
+type AuthenticatedLayoutProps = {
   title: string
   children?: any
-  user?: any
-  lists?: any[]
+  user: { id: number; display_name: string; login_id?: string }
+  lists: any[]
+  listQuota: ListQuota
   currentListId?: number
   canonicalUrl?: string
   ogImageUrl?: string
-  listQuota?: ListQuota
-}) => {
+}
+
+type PublicLayoutProps = {
+  title: string
+  children?: any
+  user?: undefined
+  lists?: undefined
+  listQuota?: undefined
+  currentListId?: undefined
+  canonicalUrl?: string
+  ogImageUrl?: string
+}
+
+export type LayoutProps = AuthenticatedLayoutProps | PublicLayoutProps
+
+export const Layout = (props: LayoutProps) => {
   const canonical = props.canonicalUrl || SITE_DOMAIN
   const ogImage = props.ogImageUrl || `${SITE_DOMAIN}/assets/icon.png`
 
-  // Use listQuota from server props, or fallback to server DEFAULT_PLAN logic
-  const quota = props.listQuota || (() => {
-    const ownedCount = props.user && props.lists
-      ? props.lists.filter((l: any) => l.created_by_user_id === props.user.id && !l.deleted_at).length
-      : 0
-    const limit = PLAN_LIMITS[DEFAULT_PLAN].ownedLists
-    return {
-      current: ownedCount,
-      limit,
-      canCreate: ownedCount < limit
-    }
-  })()
-
-  const limit = quota.limit
-  const current = quota.current
-  const canCreate = quota.canCreate
-  const limitMsg = createOwnedListLimitMessage(limit)
+  // Authenticated: use server-supplied listQuota (required).
+  // Public: no quota display.
+  const quota = props.user ? props.listQuota : undefined
+  const limitMsg = quota ? createOwnedListLimitMessage() : ''
+  const quotaAriaLabel = quota
+    ? (quota.canCreate
+      ? `所有リスト数 ${quota.current}件、上限${quota.limit}件`
+      : `所有リスト数 ${quota.current}件、上限${quota.limit}件、上限に達しています`)
+    : ''
 
   return html`<!DOCTYPE html>
 <html lang="ja">
@@ -58,7 +63,7 @@ export const Layout = (props: {
   <script src="/static/js/main.js" defer></script>
 </head>
 <body>
-  ${props.user ? html`
+  ${props.user && quota ? html`
     <header class="site-header">
       <div class="header-container">
         <div class="header-top-row">
@@ -78,15 +83,11 @@ export const Layout = (props: {
           ` : ''}
 
           <div class="header-actions">
-            <div id="list-quota-message" style="font-size: 0.75rem; color: var(--color-text-muted); font-weight: 600; padding: 0.2rem 0.45rem; background: var(--color-background); border-radius: var(--radius-sm); border: 1px solid var(--color-border); display: inline-flex; align-items: center; gap: 0.25rem;" aria-label="所有リスト数">
-              <span>所有リスト</span>
-              <span style="color: ${!canCreate ? 'var(--color-danger)' : 'var(--color-text)'}; font-weight: 700;">${current} / ${limit}</span>
-            </div>
             <button
               id="btn-create-list-dialog"
               class="btn btn-secondary btn-sm"
               style="padding: 0.3rem 0.55rem; height: 32px;"
-              ${!canCreate ? html`disabled aria-describedby="list-quota-message" title="${limitMsg}新しいリストを作るには、現在の所有リストを削除してください。"` : ''}
+              ${!quota.canCreate ? html`disabled aria-describedby="list-quota-message" title="${limitMsg}新しいリストを作るには、現在の所有リストを削除してください。"` : ''}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
               <span>新規</span>
@@ -97,6 +98,19 @@ export const Layout = (props: {
             <button id="logout-btn" class="btn btn-ghost btn-sm" title="ログアウト" aria-label="ログアウト" style="padding: 0.3rem 0.45rem; height: 32px; width: 32px;">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             </button>
+          </div>
+        </div>
+
+        <div class="header-quota-row">
+          <div
+            id="list-quota-message"
+            class="list-quota-badge"
+            role="status"
+            aria-label="${quotaAriaLabel}"
+          >
+            <span class="list-quota-badge-label">所有リスト</span>
+            <span class="list-quota-badge-value ${!quota.canCreate ? 'list-quota-badge-limit' : ''}">${quota.current} / ${quota.limit}</span>
+            ${!quota.canCreate ? html`<span class="visually-hidden">上限に達しています</span>` : ''}
           </div>
         </div>
 
@@ -117,6 +131,7 @@ export const Layout = (props: {
     ${props.children}
   </main>
   
+  ${props.user && quota ? html`
   <dialog id="create-list-dialog">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem;">
       <h3 style="font-size: 1rem; margin: 0;">新規リスト作成</h3>
@@ -138,6 +153,7 @@ export const Layout = (props: {
       </div>
     </form>
   </dialog>
+  ` : ''}
 </body>
 </html>`
 }

@@ -1,7 +1,7 @@
 import type { ShoppingList } from '../../types'
 import { ListRepository } from './repository'
 import { MemberRepository } from '../members/repository'
-import { PLAN_LIMITS, DEFAULT_PLAN, OwnedListLimitError, type PlanName, type ListQuota } from '../../config/planLimits'
+import { PLAN_CONFIG, DEFAULT_PLAN, OwnedListLimitError, type PlanName, type ListQuota } from '../../config/planLimits'
 
 export class ListService {
   private listRepo: ListRepository
@@ -26,7 +26,7 @@ export class ListService {
 
   async getListQuota(userId: number, planName: PlanName = DEFAULT_PLAN): Promise<ListQuota> {
     const current = await this.listRepo.countOwnedLists(userId)
-    const limit = PLAN_LIMITS[planName].ownedLists
+    const limit = PLAN_CONFIG[planName].ownedLists
     return {
       current,
       limit,
@@ -35,11 +35,11 @@ export class ListService {
   }
 
   async createList(name: string, userId: number, planName: PlanName = DEFAULT_PLAN): Promise<ShoppingList> {
-    const limit = PLAN_LIMITS[planName].ownedLists
+    const limit = PLAN_CONFIG[planName].ownedLists
     const currentCount = await this.listRepo.countOwnedLists(userId)
 
     if (currentCount >= limit) {
-      throw new OwnedListLimitError(currentCount, limit)
+      throw new OwnedListLimitError(currentCount, limit, planName)
     }
 
     let list: ShoppingList | null = null
@@ -48,7 +48,7 @@ export class ListService {
       list = await this.listRepo.createListWithLimit(name, userId, limit)
       if (!list) {
         const actualCount = await this.listRepo.countOwnedLists(userId)
-        throw new OwnedListLimitError(actualCount, limit)
+        throw new OwnedListLimitError(actualCount, limit, planName)
       }
       await this.memberRepo.addMember(list.id, userId, 'owner')
       return list

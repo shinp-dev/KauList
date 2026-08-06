@@ -29,6 +29,9 @@ CREATE TABLE shopping_lists (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (created_by_user_id) REFERENCES users(id)
 );
+CREATE INDEX IF NOT EXISTS idx_shopping_lists_active_owner
+ON shopping_lists(created_by_user_id)
+WHERE deleted_at IS NULL;
 
 -- 4. list_members
 CREATE TABLE list_members (

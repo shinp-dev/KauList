@@ -10,7 +10,7 @@ export const ShoppingListPage = (props: {
   members: any[]
   role: 'owner' | 'member'
   cloudName: string
-  listQuota?: ListQuota
+  listQuota: ListQuota
 }) => {
   return (
     <Layout title={props.currentList.name} user={props.user} lists={props.lists} currentListId={props.currentList.id} listQuota={props.listQuota}>

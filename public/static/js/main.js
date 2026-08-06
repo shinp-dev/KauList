@@ -19,7 +19,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const shareDialog = document.getElementById('share-dialog')
   const membersDialog = document.getElementById('members-dialog')
   const createListDialog = document.getElementById('create-list-dialog')
-  
+
+  // 3-Dots Dropdown Menu Toggle
+  const btnMoreMenu = document.getElementById('btn-more-menu')
+  const moreMenuDropdown = document.getElementById('more-menu-dropdown')
+
+  if (btnMoreMenu && moreMenuDropdown) {
+    btnMoreMenu.addEventListener('click', (e) => {
+      e.stopPropagation()
+      moreMenuDropdown.classList.toggle('show')
+    })
+
+    document.addEventListener('click', (e) => {
+      if (!moreMenuDropdown.contains(e.target) && e.target !== btnMoreMenu) {
+        moreMenuDropdown.classList.remove('show')
+      }
+    })
+  }
+
   if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault()
@@ -89,6 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
       })
     }
   }
+
   if (createListForm) {
     createListForm.addEventListener('submit', async (e) => {
       e.preventDefault()
@@ -144,10 +162,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const categoryMap = {
-      food: { label: '🍎 食品', class: 'badge-food' },
-      daily: { label: '🧴 日用品', class: 'badge-daily' },
-      medicine: { label: '💊 薬・衛生', class: 'badge-medicine' },
-      other: { label: '📦 その他', class: 'badge-other' }
+      food: { label: '食品' },
+      daily: { label: '日用品' },
+      medicine: { label: '薬・衛生用品' },
+      other: { label: 'その他' }
     }
 
     const renderItems = (items) => {
@@ -160,28 +178,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (filtered.length === 0) {
         const emptyDiv = document.createElement('div')
-        emptyDiv.className = 'empty-state'
+        emptyDiv.className = 'empty-state-container'
         emptyDiv.innerHTML = `
-          <svg width="140" height="130" viewBox="0 0 180 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <ellipse cx="90" cy="135" rx="70" ry="12" fill="#E7E3DF" opacity="0.6" />
-            <ellipse cx="90" cy="110" rx="38" ry="32" fill="#FFFFFF" stroke="#222222" stroke-width="3" />
-            <path d="M70 95C80 95 86 105 78 115C70 125 60 118 58 108C56 98 62 95 70 95Z" fill="#222222" />
-            <path d="M64 42C59 34 63 26 69 28C74 30 73 37 73 37" stroke="#D98A56" stroke-width="2.5" stroke-linecap="round" fill="#F4A261" />
-            <path d="M116 42C121 34 117 26 111 28C106 30 107 37 107 37" stroke="#D98A56" stroke-width="2.5" stroke-linecap="round" fill="#F4A261" />
-            <ellipse cx="90" cy="58" rx="30" ry="24" fill="#FFFFFF" stroke="#222222" stroke-width="3" />
-            <path d="M96 36C108 36 117 44 114 53C111 60 100 57 96 50C92 43 89 36 96 36Z" fill="#222222" />
-            <ellipse cx="58" cy="50" rx="9" ry="5" fill="#FFFFFF" stroke="#222222" stroke-width="2.5" transform="rotate(-20 58 50)" />
-            <ellipse cx="122" cy="50" rx="9" ry="5" fill="#FFFFFF" stroke="#222222" stroke-width="2.5" transform="rotate(20 122 50)" />
-            <path d="M74 53C76 50 80 50 82 53" stroke="#222222" stroke-width="2.5" stroke-linecap="round" fill="none" />
-            <path d="M98 53C100 50 104 50 106 53" stroke="#222222" stroke-width="2.5" stroke-linecap="round" fill="none" />
-            <ellipse cx="90" cy="67" rx="16" ry="10" fill="#FFC6C7" stroke="#222222" stroke-width="2.5" />
-            <ellipse cx="84" cy="65" rx="1.8" ry="2.5" fill="#555555" />
-            <ellipse cx="96" cy="65" rx="1.8" ry="2.5" fill="#555555" />
-            <rect x="75" y="100" width="30" height="32" rx="6" fill="#F3EFEA" stroke="#222222" stroke-width="2.5" />
-            <path d="M82 100V92C82 88 85 86 88 86C91 86 94 88 94 92V100" stroke="#222222" stroke-width="2.5" stroke-linecap="round" fill="none" />
-          </svg>
-          <div class="empty-state-title">まだ買い物がありません</div>
-          <div class="empty-state-desc">フォームから最初の商品を追加してみましょう！🐮</div>
+          <img src="/assets/icon.png" alt="KauList" class="empty-state-img" />
+          <div class="empty-state-title">まだ買うものがありません</div>
+          <div class="empty-state-desc">上のフォームから商品を追加しましょう</div>
         `
         itemsList.appendChild(emptyDiv)
         return
@@ -189,14 +190,14 @@ document.addEventListener('DOMContentLoaded', () => {
       
       for (const item of filtered) {
         const itemDiv = document.createElement('div')
-        itemDiv.className = `item-card ${item.bought ? 'bought' : ''}`
+        itemDiv.className = `item-row ${item.bought ? 'bought' : ''}`
 
-        // Custom Checkbox
+        // Custom Square Checkbox
         const checkboxLabel = document.createElement('label')
         checkboxLabel.className = `checkbox-custom ${item.bought ? 'checked' : ''}`
         checkboxLabel.innerHTML = `
           <input type="checkbox" ${item.bought ? 'checked' : ''} style="display: none;" />
-          <svg viewBox="0 0 24 24"><path d="M20 6L9 17L4 12"/></svg>
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
         `
         
         checkboxLabel.querySelector('input').onchange = async (e) => {
@@ -213,46 +214,44 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
 
-        // Item info
+        // Info
         const infoDiv = document.createElement('div')
         infoDiv.style.flex = '1'
         infoDiv.style.minWidth = '0'
 
         const titleDiv = document.createElement('div')
-        titleDiv.className = 'item-title'
+        titleDiv.className = 'item-name'
         titleDiv.style.fontWeight = '700'
-        titleDiv.style.fontSize = '1.05rem'
-        titleDiv.style.color = 'var(--text-main)'
-        titleDiv.style.textDecoration = item.bought ? 'line-through' : 'none'
+        titleDiv.style.fontSize = '0.95rem'
         titleDiv.textContent = `${item.name} `
         
         const countSpan = document.createElement('span')
-        countSpan.style.color = 'var(--primary)'
+        countSpan.style.color = 'var(--color-primary-dark)'
         countSpan.style.fontWeight = '800'
-        countSpan.style.fontSize = '0.95rem'
-        countSpan.textContent = ` (${item.count}${item.unit})`
+        countSpan.style.fontSize = '0.875rem'
+        countSpan.textContent = `(${item.count}${item.unit})`
         titleDiv.appendChild(countSpan)
 
         const catInfo = categoryMap[item.category] || categoryMap.other
-        const badgeSpan = document.createElement('span')
-        badgeSpan.className = `badge ${catInfo.class}`
-        badgeSpan.style.marginTop = '0.25rem'
-        badgeSpan.textContent = catInfo.label
+        const catSpan = document.createElement('span')
+        catSpan.className = 'cat-tag'
+        catSpan.style.marginTop = '0.2rem'
+        catSpan.textContent = catInfo.label
 
         infoDiv.appendChild(titleDiv)
-        infoDiv.appendChild(badgeSpan)
+        infoDiv.appendChild(catSpan)
 
         itemDiv.appendChild(checkboxLabel)
 
         // Image thumbnail
         if (item.image_url) {
           const img = document.createElement('img')
-          img.src = item.image_url.replace('/upload/', '/upload/w_120,h_120,c_fill/')
-          img.style.width = '52px'
-          img.style.height = '52px'
+          img.src = item.image_url.replace('/upload/', '/upload/w_100,h_100,c_fill/')
+          img.style.width = '44px'
+          img.style.height = '44px'
           img.style.objectFit = 'cover'
-          img.style.borderRadius = '10px'
-          img.style.border = '1px solid var(--border)'
+          img.style.borderRadius = '8px'
+          img.style.border = '1px solid var(--color-border)'
           img.style.cursor = 'pointer'
           img.onclick = () => window.open(item.image_url, '_blank')
           itemDiv.appendChild(img)
@@ -262,8 +261,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Delete button
         const delBtn = document.createElement('button')
-        delBtn.className = 'btn btn-danger btn-sm'
-        delBtn.textContent = '削除'
+        delBtn.className = 'btn btn-ghost btn-sm'
+        delBtn.style.color = 'var(--color-danger)'
+        delBtn.style.padding = '0.3rem 0.5rem'
+        delBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>`
         delBtn.onclick = async () => {
           if (confirm(`「${item.name}」を削除しますか？`)) {
             try {
@@ -280,7 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Handle filter chip radio change & update active styling
+    // Filter Chips Radio Sync
     const radios = document.querySelectorAll('input[name="filter"]')
     radios.forEach(r => {
       r.addEventListener('change', (e) => {
@@ -372,7 +373,6 @@ document.addEventListener('DOMContentLoaded', () => {
             body: JSON.stringify({ name, count, unit, category, image_id })
           })
           itemForm.reset()
-          // restore default values
           document.getElementById('item-count').value = "1"
           document.getElementById('item-unit').value = "個"
           loadItems()
@@ -412,8 +412,8 @@ document.addEventListener('DOMContentLoaded', () => {
           const input = document.getElementById('invite-url')
           input.select()
           navigator.clipboard.writeText(input.value).then(() => {
-            copyBtn.textContent = '✅ コピーしました！'
-            setTimeout(() => { copyBtn.textContent = '📋 招待URLをコピー' }, 2000)
+            copyBtn.textContent = 'コピーしました'
+            setTimeout(() => { copyBtn.textContent = '招待URLをコピー' }, 2000)
           }).catch(() => {
             document.execCommand('copy')
             alert('コピーしました')
@@ -435,15 +435,15 @@ document.addEventListener('DOMContentLoaded', () => {
             memberDiv.style.display = 'flex'
             memberDiv.style.justifyContent = 'space-between'
             memberDiv.style.alignItems = 'center'
-            memberDiv.style.padding = '0.75rem 1rem'
-            memberDiv.style.background = 'var(--bg-subtle)'
-            memberDiv.style.border = '1px solid var(--border)'
-            memberDiv.style.borderRadius = 'var(--radius-md)'
+            memberDiv.style.padding = '0.6rem 0.85rem'
+            memberDiv.style.background = 'var(--color-background)'
+            memberDiv.style.border = '1px solid var(--color-border)'
+            memberDiv.style.borderRadius = 'var(--radius-sm)'
             
             const info = document.createElement('div')
             info.innerHTML = `
-              <div style="font-weight: 700; color: var(--text-main);">${m.display_name} <span style="font-weight: 400; color: var(--text-muted); font-size: 0.85rem;">(@${m.login_id})</span></div>
-              <span class="badge ${m.role === 'owner' ? 'badge-food' : 'badge-other'}">${m.role === 'owner' ? '👑 オーナー' : '👤 メンバー'}</span>
+              <div style="font-weight: 700; font-size: 0.9rem; color: var(--color-text);">${m.display_name} <span style="font-weight: 400; color: var(--color-text-muted); font-size: 0.8rem;">(@${m.login_id})</span></div>
+              <span class="badge ${m.role === 'owner' ? 'badge-owner' : 'badge-member'}">${m.role === 'owner' ? 'オーナー' : 'メンバー'}</span>
             `
             memberDiv.appendChild(info)
             
@@ -471,6 +471,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       btnMembers.addEventListener('click', () => {
+        if (moreMenuDropdown) moreMenuDropdown.classList.remove('show')
         loadMembers()
         membersDialog.showModal()
       })
@@ -485,6 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnRenameList = document.getElementById('btn-rename-list')
     if (btnRenameList) {
       btnRenameList.addEventListener('click', async () => {
+        if (moreMenuDropdown) moreMenuDropdown.classList.remove('show')
         const newName = prompt('新しいリスト名を入力してください:')
         if (newName && newName.trim()) {
           try {
@@ -505,6 +507,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnDeleteList = document.getElementById('btn-delete-list')
     if (btnDeleteList) {
       btnDeleteList.addEventListener('click', async () => {
+        if (moreMenuDropdown) moreMenuDropdown.classList.remove('show')
         if (confirm('本当にこのリストを削除しますか？\n(※この操作は取り消せません)')) {
           try {
             await fetchJson(`/api/lists/${listId}`, {
@@ -523,6 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnLeaveList = document.getElementById('btn-leave-list')
     if (btnLeaveList) {
       btnLeaveList.addEventListener('click', async () => {
+        if (moreMenuDropdown) moreMenuDropdown.classList.remove('show')
         if (confirm('本当にこのリストから退出しますか？')) {
           try {
             await fetchJson(`/api/lists/${listId}/leave`, {

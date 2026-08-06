@@ -1,6 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "family-shopper",
+	"name": "kaulist",
 	"compatibility_date": "2026-03-16",
 	"pages_build_output_dir": "./dist",
 	"compatibility_flags": [
@@ -11,26 +11,11 @@
 		"CLOUDINARY_API_KEY": "963469414343284",
 		"ENVIRONMENT": "production"
 	},
-	// "kv_namespaces": [
-	//   {
-	//     "binding": "MY_KV_NAMESPACE",
-	//     "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-	//   }
-	// ],
-	// "r2_buckets": [
-	//   {
-	//     "binding": "MY_BUCKET",
-	//     "bucket_name": "my-bucket"
-	//   }
-	// ],
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "family-shopper-db",
+			"database_name": "kaulist-db",
 			"database_id": "9cee6cb3-d011-4e01-86f8-b15c4b479bc7"
 		}
-	],
-	// "ai": {
-	//   "binding": "AI"
-	// }
+	]
 }

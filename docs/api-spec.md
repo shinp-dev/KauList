@@ -1,6 +1,6 @@
 # API Specification
 
-Family Shopper アプリケーションが提供する API エンドポイントの一覧です。
+KauList アプリケーションが提供する API エンドポイントの一覧です。
 
 ## 1. 認証・アカウント (Auth)
 

@@ -10,6 +10,7 @@ export type PlanName = keyof typeof PLAN_CONFIG
 export const DEFAULT_PLAN: PlanName = 'free'
 
 export type ListQuota = {
+  planName: PlanName
   current: number
   limit: number
   canCreate: boolean
@@ -21,14 +22,16 @@ export const createOwnedListLimitMessage = (planName: PlanName = DEFAULT_PLAN): 
 }
 
 export class OwnedListLimitError extends Error {
-  public code = 'OWNED_LIST_LIMIT_REACHED'
+  public readonly code = 'OWNED_LIST_LIMIT_REACHED'
+  public readonly limit: number
 
   constructor(
-    public current: number,
-    public limit: number,
-    planName: PlanName = DEFAULT_PLAN
+    public readonly current: number,
+    public readonly planName: PlanName = DEFAULT_PLAN
   ) {
+    const plan = PLAN_CONFIG[planName]
     super(createOwnedListLimitMessage(planName))
+    this.limit = plan.ownedLists
     this.name = 'OwnedListLimitError'
   }
 }

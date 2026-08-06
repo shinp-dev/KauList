@@ -87,7 +87,13 @@ app.get('/', async (c) => {
           </svg>
           <div class="empty-state-title">参加しているリストがありません</div>
           <div class="empty-state-desc">新しいリストを作成するか、共有招待リンクから参加してください。</div>
-          <button class="btn btn-primary" onclick="document.getElementById('create-list-dialog').showModal()">＋ 新しいリストを作成する</button>
+          {listQuota.canCreate ? (
+            <button class="btn btn-primary" onclick="document.getElementById('create-list-dialog').showModal()">＋ 新しいリストを作成する</button>
+          ) : (
+            <div class="alert-info" style="margin-top: 1rem; padding: 0.85rem; background: rgba(217, 138, 86, 0.1); border: 1px solid var(--color-primary-light); border-radius: var(--radius-md); font-size: 0.875rem; color: var(--color-text-main); line-height: 1.5;">
+              所有リストの上限に達しています。<br />新しいリストを作るには、現在の所有リストを削除してください。
+            </div>
+          )}
         </div>
       </Layout>
     )

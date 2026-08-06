@@ -37,7 +37,7 @@ export const Layout = (props: LayoutProps) => {
   // Authenticated: use server-supplied listQuota (required).
   // Public: no quota display.
   const quota = props.user ? props.listQuota : undefined
-  const limitMsg = quota ? createOwnedListLimitMessage() : ''
+  const limitMsg = quota ? createOwnedListLimitMessage(quota.planName) : ''
   const quotaAriaLabel = quota
     ? (quota.canCreate
       ? `所有リスト数 ${quota.current}件、上限${quota.limit}件`

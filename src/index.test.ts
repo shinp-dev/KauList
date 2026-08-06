@@ -559,44 +559,49 @@ describe('Database Integration Tests', () => {
 
     // ── PLAN_CONFIG structure ──
 
+    // ── PLAN_CONFIG structure ──
+
     it('PLAN_CONFIG.free.ownedLists change is reflected in quota judgment', async () => {
       const { PLAN_CONFIG } = await import('./config/planLimits')
-      expect(typeof PLAN_CONFIG.free.ownedLists).toBe('number')
-      expect(PLAN_CONFIG.free.ownedLists).toBeGreaterThan(0)
-      expect(PLAN_CONFIG.free.label).toBe('無料プラン')
+      const user = await db.prepare("INSERT INTO users (login_id, display_name, password_hash) VALUES ('quota_plan_test', 'QuotaPlanTest', 'hash') RETURNING *").first()
+      const listService = new ListService(db)
+
+      const quota = await listService.getListQuota(user.id, 'free')
+
+      expect(quota.planName).toBe('free')
+      expect(quota.limit).toBe(PLAN_CONFIG.free.ownedLists)
+      expect(quota.canCreate).toBe(quota.current < PLAN_CONFIG.free.ownedLists)
     })
 
-    it('createOwnedListLimitMessage uses plan label and ownedLists dynamically', () => {
-      // Default (free) plan
-      const msg = createOwnedListLimitMessage()
-      expect(msg).toBe('無料プランでは、自分のリストを1つまで作成できます。')
-
-      // Explicit free plan
-      const msg2 = createOwnedListLimitMessage('free')
-      expect(msg2).toBe('無料プランでは、自分のリストを1つまで作成できます。')
-    })
-
-    it('Does not duplicate hardcoded plan name or limit in separate files', () => {
-      // The message generator uses PLAN_CONFIG internally, so no "無料プラン" literal
-      // is needed outside of planLimits.ts. Verified by the dynamic test above.
+    it('createOwnedListLimitMessage uses PLAN_CONFIG label and ownedLists', () => {
       const msg = createOwnedListLimitMessage('free')
-      expect(msg).toContain('無料プラン')
-      expect(msg).toContain('1つまで')
+      expect(msg).toBe('無料プランでは、自分のリストを1つまで作成できます。')
     })
 
     // ── ListService.getListQuota ──
 
-    it('ListService.getListQuota returns server-calculated current, limit, and canCreate', async () => {
+    it('ListService.getListQuota returns server-calculated planName, current, limit, and canCreate', async () => {
       const user = await db.prepare("INSERT INTO users (login_id, display_name, password_hash) VALUES ('quota_test', 'QuotaTest', 'hash') RETURNING *").first()
       const listService = new ListService(db)
 
       const quota1 = await listService.getListQuota(user.id)
-      expect(quota1).toEqual({ current: 0, limit: 1, canCreate: true })
+      expect(quota1).toEqual({ planName: 'free', current: 0, limit: 1, canCreate: true })
 
       await listService.createList('List 1', user.id)
 
       const quota2 = await listService.getListQuota(user.id)
-      expect(quota2).toEqual({ current: 1, limit: 1, canCreate: false })
+      expect(quota2).toEqual({ planName: 'free', current: 1, limit: 1, canCreate: false })
+    })
+
+    it('OwnedListLimitError derives limit and message from PLAN_CONFIG dynamically', async () => {
+      const { OwnedListLimitError } = await import('./config/planLimits')
+      const err = new OwnedListLimitError(1, 'free')
+
+      expect(err.code).toBe('OWNED_LIST_LIMIT_REACHED')
+      expect(err.current).toBe(1)
+      expect(err.limit).toBe(1)
+      expect(err.planName).toBe('free')
+      expect(err.message).toBe('無料プランでは、自分のリストを1つまで作成できます。')
     })
 
     it('listQuota is passed in normal list page (GET /lists/:listId)', async () => {
@@ -624,6 +629,21 @@ describe('Database Integration Tests', () => {
       // Quota badge should be present even with 0 lists
       expect(html).toContain('id="list-quota-message"')
       expect(html).toContain('0 / 1')
+      expect(html).toContain('＋ 新しいリストを作成する')
+    })
+
+    it('Empty home page creation UI follows listQuota.canCreate when limit is reached', async () => {
+      const user = await db.prepare("INSERT INTO users (login_id, display_name, password_hash) VALUES ('empty_home_limit', 'EmptyHomeLimit', 'hash') RETURNING *").first()
+      const token = await new AuthService(db).createSession(user.id)
+
+      // Create 1 owned list, but member row missing/removed to simulate orphan owned list
+      await db.prepare("INSERT INTO shopping_lists (name, created_by_user_id) VALUES ('Orphan List', ?)").bind(user.id).run()
+
+      const pageRes = await req('GET', '/', null, token)
+      expect(pageRes.status).toBe(200)
+      const html = await pageRes.text()
+      expect(html).toContain('所有リストの上限に達しています')
+      expect(html).not.toContain('＋ 新しいリストを作成する')
     })
 
     // ── Layout: header and quota display ──
@@ -631,7 +651,7 @@ describe('Database Integration Tests', () => {
     it('Layout displays listQuota.current and listQuota.limit in HTML', () => {
       const user = { id: 10, display_name: 'TestUser' }
       const lists = [{ id: 100, name: 'My List', created_by_user_id: 10, deleted_at: null }]
-      const listQuota = { current: 1, limit: 1, canCreate: false }
+      const listQuota = { planName: 'free' as const, current: 1, limit: 1, canCreate: false }
 
       const htmlOutput = Layout({ title: 'Test', user, lists, listQuota }).toString()
       expect(htmlOutput).toContain('1 / 1')
@@ -640,7 +660,7 @@ describe('Database Integration Tests', () => {
     it('Layout targets #btn-create-list-dialog with disabled attribute when canCreate=false', () => {
       const user = { id: 10, display_name: 'TestUser' }
       const lists = [{ id: 100, name: 'My List', created_by_user_id: 10, deleted_at: null }]
-      const listQuota = { current: 1, limit: 1, canCreate: false }
+      const listQuota = { planName: 'free' as const, current: 1, limit: 1, canCreate: false }
 
       const htmlOutput = Layout({ title: 'Test', user, lists, listQuota }).toString()
 
@@ -652,7 +672,7 @@ describe('Database Integration Tests', () => {
     it('Layout enables #btn-create-list-dialog when canCreate=true', () => {
       const user = { id: 10, display_name: 'TestUser' }
       const lists = [{ id: 100, name: 'Shared List', created_by_user_id: 99, deleted_at: null }]
-      const listQuota = { current: 0, limit: 1, canCreate: true }
+      const listQuota = { planName: 'free' as const, current: 0, limit: 1, canCreate: true }
 
       const htmlOutput = Layout({ title: 'Test', user, lists, listQuota }).toString()
 
@@ -664,7 +684,7 @@ describe('Database Integration Tests', () => {
     it('Layout renders custom limit values in quota badge (e.g. 1/5)', () => {
       const user = { id: 10, display_name: 'TestUser' }
       const lists = [{ id: 100, name: 'Shared List', created_by_user_id: 99, deleted_at: null }]
-      const listQuota = { current: 1, limit: 5, canCreate: true }
+      const listQuota = { planName: 'free' as const, current: 1, limit: 5, canCreate: true }
 
       const htmlOutput = Layout({ title: 'Test', user, lists, listQuota }).toString()
       expect(htmlOutput).toContain('1 / 5')
@@ -675,7 +695,7 @@ describe('Database Integration Tests', () => {
     it('Quota badge has appropriate aria-label describing count and limit', () => {
       const user = { id: 10, display_name: 'TestUser' }
       const lists: any[] = []
-      const listQuota = { current: 0, limit: 1, canCreate: true }
+      const listQuota = { planName: 'free' as const, current: 0, limit: 1, canCreate: true }
 
       const htmlOutput = Layout({ title: 'Test', user, lists, listQuota }).toString()
       expect(htmlOutput).toContain('aria-label="所有リスト数 0件、上限1件"')
@@ -684,7 +704,7 @@ describe('Database Integration Tests', () => {
     it('Quota badge aria-label includes limit-reached message when at limit', () => {
       const user = { id: 10, display_name: 'TestUser' }
       const lists = [{ id: 100, name: 'My List', created_by_user_id: 10, deleted_at: null }]
-      const listQuota = { current: 1, limit: 1, canCreate: false }
+      const listQuota = { planName: 'free' as const, current: 1, limit: 1, canCreate: false }
 
       const htmlOutput = Layout({ title: 'Test', user, lists, listQuota }).toString()
       expect(htmlOutput).toContain('aria-label="所有リスト数 1件、上限1件、上限に達しています"')
@@ -693,22 +713,15 @@ describe('Database Integration Tests', () => {
 
     // ── listQuota required for authenticated Layout (type safety) ──
 
-    it('Authenticated Layout requires listQuota (TypeScript enforced)', () => {
-      // This test verifies the union type is correctly structured.
-      // If listQuota were optional for authenticated Layout, the type system
-      // would not catch missing props. This test verifies the contract by
-      // exercising both authenticated and public Layout rendering.
-
-      // Public layout: no user, no listQuota required
+    it('Authenticated Layout renders with server-provided listQuota', () => {
       const publicHtml = Layout({ title: 'Public' }).toString()
       expect(publicHtml).not.toContain('id="list-quota-message"')
 
-      // Authenticated layout: user + listQuota required
       const authHtml = Layout({
         title: 'Auth',
         user: { id: 1, display_name: 'Test' },
         lists: [],
-        listQuota: { current: 0, limit: 1, canCreate: true }
+        listQuota: { planName: 'free', current: 0, limit: 1, canCreate: true }
       }).toString()
       expect(authHtml).toContain('id="list-quota-message"')
     })
@@ -716,8 +729,6 @@ describe('Database Integration Tests', () => {
     // ── Index: idx_shopping_lists_active_owner ──
 
     it('schema.sql contains idx_shopping_lists_active_owner index', async () => {
-      // The index was created via schema.sql which is used to initialize the test DB.
-      // Verify the index exists by querying sqlite_master.
       const idx = await db.prepare(
         "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_shopping_lists_active_owner'"
       ).first()
@@ -725,23 +736,22 @@ describe('Database Integration Tests', () => {
       expect(idx.name).toBe('idx_shopping_lists_active_owner')
     })
 
-    it('Migration 0005 creates same index (IF NOT EXISTS prevents errors on re-run)', async () => {
-      // Simulate running the migration again on the same DB
-      // The IF NOT EXISTS clause should prevent errors
-      await db.prepare(`
-        CREATE INDEX IF NOT EXISTS idx_shopping_lists_active_owner
-        ON shopping_lists(created_by_user_id)
-        WHERE deleted_at IS NULL
-      `).run()
+    it('Migration 0005 file can be executed directly and re-applied without errors', async () => {
+      const { readFileSync } = await import('fs')
+      const migrationPath = join(process.cwd(), 'migrations/0005_add_active_owner_index.sql')
+      const migrationSql = readFileSync(migrationPath, 'utf-8')
+
+      // Execute migration SQL on test DB
+      await db.exec(migrationSql)
 
       const idx = await db.prepare(
         "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_shopping_lists_active_owner'"
       ).first()
       expect(idx).not.toBeNull()
+      expect(idx.name).toBe('idx_shopping_lists_active_owner')
     })
 
     it('All existing tests still pass after applying the index (no data corruption)', async () => {
-      // Insert data and verify count query still works correctly with the index
       const user = await db.prepare("INSERT INTO users (login_id, display_name, password_hash) VALUES ('idx_test', 'IdxTest', 'hash') RETURNING *").first()
       
       // Active list

@@ -28,6 +28,7 @@ export class ListService {
     const current = await this.listRepo.countOwnedLists(userId)
     const limit = PLAN_CONFIG[planName].ownedLists
     return {
+      planName,
       current,
       limit,
       canCreate: current < limit
@@ -39,7 +40,7 @@ export class ListService {
     const currentCount = await this.listRepo.countOwnedLists(userId)
 
     if (currentCount >= limit) {
-      throw new OwnedListLimitError(currentCount, limit, planName)
+      throw new OwnedListLimitError(currentCount, planName)
     }
 
     let list: ShoppingList | null = null
@@ -48,7 +49,7 @@ export class ListService {
       list = await this.listRepo.createListWithLimit(name, userId, limit)
       if (!list) {
         const actualCount = await this.listRepo.countOwnedLists(userId)
-        throw new OwnedListLimitError(actualCount, limit, planName)
+        throw new OwnedListLimitError(actualCount, planName)
       }
       await this.memberRepo.addMember(list.id, userId, 'owner')
       return list

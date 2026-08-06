@@ -4,6 +4,7 @@ import { createD1Mock } from './test-utils/d1-mock'
 import { jsx } from 'hono/jsx'
 import app from './index'
 import { AuthService } from './modules/auth/service'
+import { Layout } from './components/Layout'
 
 const schemaPath = join(process.cwd(), 'schema.sql')
 
@@ -506,6 +507,61 @@ describe('Database Integration Tests', () => {
       expect(createRes.status).toBe(403)
       const errData: any = await createRes.json()
       expect(errData.code).toBe('OWNED_LIST_LIMIT_REACHED')
+    })
+
+    it('Concurrent POST /api/lists requests for user with 0 owned lists resulting in 1 success (201) and 1 limit error (403)', async () => {
+      const user = await db.prepare("INSERT INTO users (login_id, display_name, password_hash) VALUES ('concurrent_user', 'Concurrent', 'hash') RETURNING *").first()
+      const token = await new AuthService(db).createSession(user.id)
+
+      const [res1, res2] = await Promise.all([
+        req('POST', '/api/lists', { name: 'Concurrent List 1' }, token),
+        req('POST', '/api/lists', { name: 'Concurrent List 2' }, token)
+      ])
+
+      const statuses = [res1.status, res2.status].sort()
+      expect(statuses).toEqual([201, 403])
+
+      const successRes = res1.status === 201 ? res1 : res2
+      const errorRes = res1.status === 403 ? res1 : res2
+
+      const successData: any = await successRes.json()
+      const errorData: any = await errorRes.json()
+
+      expect(successData.success).toBe(true)
+      expect(errorData.success).toBe(false)
+      expect(errorData.code).toBe('OWNED_LIST_LIMIT_REACHED')
+      expect(errorData.current).toBe(1)
+      expect(errorData.limit).toBe(1)
+
+      const ownedLists = await db.prepare('SELECT * FROM shopping_lists WHERE created_by_user_id = ? AND deleted_at IS NULL').bind(user.id).all()
+      expect(ownedLists.results).toHaveLength(1)
+
+      const listId = ownedLists.results[0].id
+      const members = await db.prepare("SELECT * FROM list_members WHERE list_id = ? AND role = 'owner'").bind(listId).all()
+      expect(members.results).toHaveLength(1)
+      expect(members.results[0].user_id).toBe(user.id)
+
+      const orphanLists = await db.prepare(`
+        SELECT sl.* FROM shopping_lists sl
+        LEFT JOIN list_members lm ON sl.id = lm.list_id
+        WHERE lm.list_id IS NULL
+      `).all()
+      expect(orphanLists.results).toHaveLength(0)
+    })
+
+    it('Layout component disables create button when user has 1 owned list', () => {
+      const user = { id: 10, display_name: 'TestUser' }
+      const lists = [{ id: 100, name: 'My List', created_by_user_id: 10, deleted_at: null }]
+      const htmlOutput = Layout({ title: 'Test', user, lists }).toString()
+      expect(htmlOutput).toContain('disabled')
+      expect(htmlOutput).toContain('title="無料プランでは、自分のリストを1つまで作成できます。')
+    })
+
+    it('Layout component enables create button when user has 0 owned lists (even with shared lists)', () => {
+      const user = { id: 10, display_name: 'TestUser' }
+      const lists = [{ id: 100, name: 'Shared List', created_by_user_id: 99, deleted_at: null }]
+      const htmlOutput = Layout({ title: 'Test', user, lists }).toString()
+      expect(htmlOutput).not.toContain('disabled')
     })
   })
 })

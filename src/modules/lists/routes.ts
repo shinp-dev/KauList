@@ -29,13 +29,13 @@ listsRoutes.post('/', csrfProtection, async (c) => {
     const list = await service.createList(name, user.id)
     return c.json({ success: true, list }, 201)
   } catch (err: any) {
-    if (err instanceof OwnedListLimitError || err?.code === 'OWNED_LIST_LIMIT_REACHED') {
+    if (err instanceof OwnedListLimitError) {
       return c.json({
         success: false,
-        code: 'OWNED_LIST_LIMIT_REACHED',
-        error: err.message || '無料プランでは自分のリストを1つまで作成できます',
-        current: err.current ?? 1,
-        limit: err.limit ?? 1
+        code: err.code,
+        error: err.message,
+        current: err.current,
+        limit: err.limit
       }, 403)
     }
     return c.json({ success: false, error: err.message }, 500)

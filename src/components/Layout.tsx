@@ -14,6 +14,12 @@ export const Layout = (props: {
   const canonical = props.canonicalUrl || SITE_DOMAIN
   const ogImage = props.ogImageUrl || `${SITE_DOMAIN}/assets/icon.png`
 
+  const ownedListCount = props.user && props.lists
+    ? props.lists.filter((l: any) => l.created_by_user_id === props.user.id && !l.deleted_at).length
+    : 0
+  const isLimitReached = ownedListCount >= 1
+  const limitTitle = "無料プランでは、自分のリストを1つまで作成できます。新しいリストを作るには、現在の所有リストを削除してください。"
+
   return html`<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -53,7 +59,12 @@ export const Layout = (props: {
           ` : ''}
 
           <div class="header-actions">
-            <button id="btn-create-list-dialog" class="btn btn-secondary btn-sm" style="padding: 0.3rem 0.55rem; height: 32px;">
+            <button
+              id="btn-create-list-dialog"
+              class="btn btn-secondary btn-sm"
+              style="padding: 0.3rem 0.55rem; height: 32px;"
+              ${isLimitReached ? html`disabled title="${limitTitle}"` : ''}
+            >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
               <span>新規</span>
             </button>

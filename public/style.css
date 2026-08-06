@@ -104,7 +104,7 @@ a:hover {
   z-index: 1;
 }
 
-/* Header */
+/* Responsive Header (2-tier on Mobile, 1-row on Desktop) */
 .site-header {
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
@@ -116,11 +116,18 @@ a:hover {
 .header-container {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 0.55rem 0.85rem;
+  padding: 0.45rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.header-top-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  width: 100%;
 }
 
 .brand-logo {
@@ -132,6 +139,7 @@ a:hover {
   font-weight: 800;
   color: var(--color-text);
   text-decoration: none;
+  flex-shrink: 0;
 }
 
 .brand-logo img {
@@ -139,6 +147,68 @@ a:hover {
   height: 28px;
   border-radius: 6px;
   object-fit: cover;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.user-display-name {
+  font-size: 0.775rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: var(--color-background);
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  max-width: 85px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-select-input {
+  font-weight: 700;
+  padding: 0.4rem 1.8rem 0.4rem 0.65rem;
+  font-size: 0.85rem;
+  background-color: var(--color-background);
+  width: 100%;
+}
+
+.header-switcher-mobile {
+  display: block;
+  width: 100%;
+}
+
+.header-switcher-desktop {
+  display: none;
+}
+
+@media (min-width: 641px) {
+  .header-container {
+    padding: 0.55rem 0.85rem;
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .header-switcher-mobile {
+    display: none;
+  }
+
+  .header-switcher-desktop {
+    display: block;
+    flex: 1;
+    max-width: 260px;
+    margin: 0 0.5rem;
+  }
+
+  .user-display-name {
+    max-width: 140px;
+  }
 }
 
 /* Surfaces & Cards */
@@ -150,7 +220,7 @@ a:hover {
   margin-bottom: 0.9rem;
 }
 
-/* Natural Header Section for List (Compressed & 1-row layout) */
+/* Natural Header Section for List */
 .list-header-section {
   display: flex;
   align-items: center;
@@ -325,7 +395,7 @@ a:hover {
   background: var(--color-danger-soft);
 }
 
-/* Forms & Inputs (Tightened spacing) */
+/* Forms & Inputs */
 .form-group {
   display: flex;
   flex-direction: column;
@@ -492,7 +562,7 @@ select.form-control {
   opacity: 1;
 }
 
-/* Empty State (Compact & Reduced Height) */
+/* Empty State */
 .empty-state-container {
   text-align: center;
   padding: 1.25rem 0.85rem;
@@ -556,10 +626,6 @@ dialog::backdrop {
 @media (max-width: 640px) {
   .main-container {
     padding: 0.75rem 0.65rem 1.5rem 0.65rem;
-  }
-
-  .header-container {
-    padding: 0.45rem 0.65rem;
   }
 
   .list-header-section {

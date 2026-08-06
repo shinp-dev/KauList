@@ -1,6 +1,6 @@
 import { jsx } from 'hono/jsx'
 import { Layout } from './Layout'
-import { ShareIcon, MoreVerticalIcon, PencilIcon, UsersIcon, TrashIcon, PlusIcon, ImageIcon } from './CowAssets'
+import { ShareIcon, MoreVerticalIcon, PencilIcon, UsersIcon, TrashIcon, PlusIcon, ImageIcon, XIcon } from './CowAssets'
 
 export const ShoppingListPage = (props: {
   user: any
@@ -23,25 +23,25 @@ export const ShoppingListPage = (props: {
 
       {/* Natural 1-Row List Header Area */}
       <div class="list-header-section">
-        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-          <h1 style="font-size: 1.25rem; font-weight: 800; color: var(--color-text); margin: 0;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; min-width: 0;">
+          <h1 style="font-size: 1.25rem; font-weight: 800; color: var(--color-text); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px;">
             {props.currentList.name}
           </h1>
-          <span class={`badge ${props.role === 'owner' ? 'badge-owner' : 'badge-member'}`} style="font-size: 0.65rem; padding: 0.1rem 0.35rem;">
+          <span class={`badge ${props.role === 'owner' ? 'badge-owner' : 'badge-member'}`} style="font-size: 0.65rem; padding: 0.1rem 0.35rem; flex-shrink: 0;">
             {props.role === 'owner' ? 'オーナー' : 'メンバー'}
           </span>
         </div>
 
         {/* Action buttons: Primary Share + 3-dots Menu */}
-        <div style="display: flex; align-items: center; gap: 0.4rem;">
-          <button id="btn-share" class="btn btn-primary btn-sm">
+        <div style="display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0;">
+          <button id="btn-share" class="btn btn-primary btn-sm" style="height: 32px;">
             <ShareIcon size={14} />
             共有
           </button>
 
           {/* Dropdown Menu Wrapper for Secondary Actions */}
           <div class="dropdown-wrapper">
-            <button id="btn-more-menu" class="btn btn-secondary btn-icon" title="操作メニュー" style="width: 30px; height: 30px; padding: 0.3rem;">
+            <button id="btn-more-menu" class="btn btn-secondary btn-icon" title="操作メニュー" aria-label="操作メニュー" style="width: 32px; height: 32px; padding: 0.3rem;">
               <MoreVerticalIcon size={16} />
             </button>
             <div id="more-menu-dropdown" class="dropdown-menu">
@@ -136,7 +136,7 @@ export const ShoppingListPage = (props: {
               </select>
             </div>
 
-            {/* Custom Image File Upload UI */}
+            {/* Custom Image File Upload UI with Clear Button */}
             <div class="form-group" style="min-width: 0;">
               <label class="form-label">画像 (任意)</label>
               <div style="display: flex; align-items: center; gap: 0.4rem; height: 35px; min-width: 0;">
@@ -147,17 +147,20 @@ export const ShoppingListPage = (props: {
                 </label>
                 
                 {/* Visible ONLY when a file is selected */}
-                <div id="item-image-info" style="display: none; align-items: center; gap: 0.35rem; font-size: 0.775rem; min-width: 0; flex: 1; overflow: hidden; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 0.2rem 0.5rem; height: 35px;">
+                <div id="item-image-info" style="display: none; align-items: center; gap: 0.35rem; font-size: 0.775rem; min-width: 0; flex: 1; overflow: hidden; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 0.2rem 0.4rem; height: 35px;">
                   <img id="item-image-preview" style="display: none; width: 24px; height: 24px; border-radius: 4px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--color-border);" />
-                  <span id="item-image-filename" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text);"></span>
+                  <span id="item-image-filename" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text); flex: 1;"></span>
+                  <button type="button" id="btn-clear-image" class="btn btn-ghost btn-sm" title="画像を解除" style="padding: 0.1rem 0.25rem; height: 24px; width: 24px; flex-shrink: 0; color: var(--color-text-muted);">
+                    <XIcon size={13} />
+                  </button>
                 </div>
               </div>
             </div>
 
             <div>
-              <button type="submit" class="btn btn-primary" style="width: 100%; height: 35px; padding: 0.35rem 0.65rem;">
+              <button type="submit" id="btn-submit-item" class="btn btn-primary" style="width: 100%; height: 35px; padding: 0.35rem 0.65rem;">
                 <PlusIcon size={14} />
-                追加
+                <span id="btn-submit-item-text">追加</span>
               </button>
             </div>
           </div>

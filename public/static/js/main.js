@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const fileInfoBox = document.getElementById('item-image-info')
   const fileFileName = document.getElementById('item-image-filename')
   const filePreview = document.getElementById('item-image-preview')
+  const btnClearImage = document.getElementById('btn-clear-image')
 
   // Unit Select Elements
   const unitSelect = document.getElementById('item-unit-select')
@@ -39,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const resetImageUI = () => {
+    if (fileInput) fileInput.value = ''
     if (fileBtnText) fileBtnText.textContent = '画像を選ぶ'
     if (fileInfoBox) fileInfoBox.style.display = 'none'
     if (fileFileName) fileFileName.textContent = ''
@@ -46,6 +48,14 @@ document.addEventListener('DOMContentLoaded', () => {
       filePreview.style.display = 'none'
       filePreview.src = ''
     }
+  }
+
+  if (btnClearImage) {
+    btnClearImage.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      resetImageUI()
+    })
   }
 
   if (fileInput) {
@@ -321,6 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
         delBtn.className = 'btn btn-ghost btn-sm'
         delBtn.style.color = 'var(--color-danger)'
         delBtn.style.padding = '0.3rem 0.5rem'
+        delBtn.setAttribute('aria-label', '商品を削除')
         delBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>`
         delBtn.onclick = async () => {
           if (confirm(`「${item.name}」を削除しますか？`)) {
@@ -353,9 +364,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (itemForm) {
       itemForm.addEventListener('submit', async (e) => {
         e.preventDefault()
-        const submitBtn = itemForm.querySelector('button[type="submit"]')
-        submitBtn.disabled = true
+        const submitBtn = document.getElementById('btn-submit-item') || itemForm.querySelector('button[type="submit"]')
+        const btnSubmitText = document.getElementById('btn-submit-item-text')
         const progress = document.getElementById('upload-progress')
+
+        // Disable button & show loading text
+        if (submitBtn) submitBtn.disabled = true
+        if (btnSubmitText) btnSubmitText.textContent = '追加中...'
         
         const name = document.getElementById('item-name').value
         const count = parseInt(document.getElementById('item-count').value, 10)
@@ -420,7 +435,8 @@ document.addEventListener('DOMContentLoaded', () => {
           } catch (err) {
             alert('画像アップロードに失敗しました: ' + err.message)
             cleanupTemporaryImage()
-            submitBtn.disabled = false
+            if (submitBtn) submitBtn.disabled = false
+            if (btnSubmitText) btnSubmitText.textContent = '追加'
             if (progress) progress.style.display = 'none'
             return
           }
@@ -446,7 +462,8 @@ document.addEventListener('DOMContentLoaded', () => {
           alert('商品の追加に失敗しました: ' + err.message)
           cleanupTemporaryImage()
         } finally {
-          submitBtn.disabled = false
+          if (submitBtn) submitBtn.disabled = false
+          if (btnSubmitText) btnSubmitText.textContent = '追加'
           if (progress) progress.style.display = 'none'
         }
       })

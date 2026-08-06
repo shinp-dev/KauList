@@ -31,14 +31,14 @@ export const Layout = (props: { title: string, children?: any, user?: any, lists
           ` : ''}
 
           <div class="header-actions">
-            <button id="btn-create-list-dialog" class="btn btn-secondary btn-sm" style="padding: 0.3rem 0.55rem;">
+            <button id="btn-create-list-dialog" class="btn btn-secondary btn-sm" style="padding: 0.3rem 0.55rem; height: 32px;">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
               <span>新規</span>
             </button>
             <span class="user-display-name">
               ${props.user.display_name}
             </span>
-            <button id="logout-btn" class="btn btn-ghost btn-sm" title="ログアウト" style="padding: 0.3rem 0.45rem;">
+            <button id="logout-btn" class="btn btn-ghost btn-sm" title="ログアウト" aria-label="ログアウト" style="padding: 0.3rem 0.45rem; height: 32px; width: 32px;">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             </button>
           </div>

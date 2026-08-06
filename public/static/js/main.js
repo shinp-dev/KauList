@@ -15,6 +15,49 @@ document.addEventListener('DOMContentLoaded', () => {
   const itemsList = document.getElementById('items-list')
   const appData = document.getElementById('app-data')
   
+  // Custom File Input UI Elements
+  const fileInput = document.getElementById('item-image')
+  const fileBtnText = document.getElementById('item-image-btn-text')
+  const fileFileName = document.getElementById('item-image-filename')
+  const filePreview = document.getElementById('item-image-preview')
+
+  const resetImageUI = () => {
+    if (fileBtnText) fileBtnText.textContent = '画像を選ぶ'
+    if (fileFileName) {
+      fileFileName.textContent = '未選択'
+      fileFileName.style.color = 'var(--color-text-muted)'
+    }
+    if (filePreview) {
+      filePreview.style.display = 'none'
+      filePreview.src = ''
+    }
+  }
+
+  if (fileInput) {
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0]
+      if (file) {
+        if (fileBtnText) fileBtnText.textContent = '画像を変更'
+        if (fileFileName) {
+          fileFileName.textContent = file.name
+          fileFileName.style.color = 'var(--color-text)'
+        }
+        if (file.type.startsWith('image/')) {
+          const reader = new FileReader()
+          reader.onload = (e) => {
+            if (filePreview) {
+              filePreview.src = e.target.result
+              filePreview.style.display = 'block'
+            }
+          }
+          reader.readAsDataURL(file)
+        }
+      } else {
+        resetImageUI()
+      }
+    })
+  }
+
   // Dialogs
   const shareDialog = document.getElementById('share-dialog')
   const membersDialog = document.getElementById('members-dialog')
@@ -304,7 +347,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const count = parseInt(document.getElementById('item-count').value, 10)
         const unit = document.getElementById('item-unit').value
         const category = document.getElementById('item-category').value
-        const fileInput = document.getElementById('item-image')
         const file = fileInput ? fileInput.files[0] : null
         
         let image_id = undefined
@@ -375,6 +417,7 @@ document.addEventListener('DOMContentLoaded', () => {
           itemForm.reset()
           document.getElementById('item-count').value = "1"
           document.getElementById('item-unit').value = "個"
+          resetImageUI()
           loadItems()
         } catch (err) {
           alert('商品の追加に失敗しました: ' + err.message)

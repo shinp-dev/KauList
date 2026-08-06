@@ -1,6 +1,6 @@
 import { jsx } from 'hono/jsx'
 import { Layout } from './Layout'
-import { ShareIcon, MoreVerticalIcon, PencilIcon, UsersIcon, TrashIcon, PlusIcon } from './CowAssets'
+import { ShareIcon, MoreVerticalIcon, PencilIcon, UsersIcon, TrashIcon, PlusIcon, ImageIcon } from './CowAssets'
 
 export const ShoppingListPage = (props: {
   user: any
@@ -79,7 +79,7 @@ export const ShoppingListPage = (props: {
         </div>
       </div>
 
-      {/* Add Item Form Area (Compressed Spacing & Quantity/Unit in same row) */}
+      {/* Add Item Form Area (Custom Image File Picker UI) */}
       <div class="surface-card">
         <h3 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--color-text);">
           商品を追加
@@ -104,8 +104,8 @@ export const ShoppingListPage = (props: {
             </div>
           </div>
 
-          {/* Category, Image, Submit Button */}
-          <div style="display: grid; grid-template-columns: 130px 1fr 100px; gap: 0.5rem; align-items: flex-end;" class="form-row-desktop">
+          {/* Category, Custom Image Upload Button, Submit Button */}
+          <div style="display: grid; grid-template-columns: 130px 1fr 90px; gap: 0.5rem; align-items: flex-end;" class="form-row-desktop">
             <div class="form-group">
               <label for="item-category" class="form-label">カテゴリ</label>
               <select id="item-category" class="form-control" required>
@@ -116,9 +116,20 @@ export const ShoppingListPage = (props: {
               </select>
             </div>
 
-            <div class="form-group">
-              <label for="item-image" class="form-label">画像 (任意)</label>
-              <input type="file" id="item-image" class="form-control" accept="image/*" style="padding: 0.4rem;" />
+            {/* Custom Image File Upload UI */}
+            <div class="form-group" style="min-width: 0;">
+              <label class="form-label">画像 (任意)</label>
+              <div style="display: flex; align-items: center; gap: 0.4rem; height: 35px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 0.2rem 0.5rem; overflow: hidden;">
+                <input type="file" id="item-image" accept="image/*" style="display: none;" />
+                <label for="item-image" class="btn btn-secondary btn-sm" style="cursor: pointer; height: 27px; padding: 0.2rem 0.55rem; font-size: 0.75rem; flex-shrink: 0;">
+                  <ImageIcon size={13} />
+                  <span id="item-image-btn-text">画像を選ぶ</span>
+                </label>
+                <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.775rem; min-width: 0; flex: 1;">
+                  <img id="item-image-preview" style="display: none; width: 24px; height: 24px; border-radius: 4px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--color-border);" />
+                  <span id="item-image-filename" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-muted);">未選択</span>
+                </div>
+              </div>
             </div>
 
             <div>

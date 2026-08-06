@@ -14,14 +14,12 @@ export const Layout = (props: { title: string, children?: any, user?: any, lists
   ${props.user ? html`
     <header class="site-header">
       <div class="header-container">
-        {/* Tier 1: Logo + User Actions */}
         <div class="header-top-row">
           <a href="/" class="brand-logo">
             <img src="/assets/icon.png" alt="KauList" />
             <span>KauList</span>
           </a>
 
-          {/* Desktop List Switcher (Hidden on Mobile) */}
           ${props.lists && props.lists.length > 0 ? html`
             <div class="header-switcher-desktop">
               <select id="list-switcher-desktop" class="form-control list-select-input" onchange="window.location.href='/lists/' + this.value">
@@ -46,7 +44,6 @@ export const Layout = (props: { title: string, children?: any, user?: any, lists
           </div>
         </div>
 
-        {/* Tier 2: Mobile List Switcher (Full Width, Hidden on Desktop) */}
         ${props.lists && props.lists.length > 0 ? html`
           <div class="header-switcher-mobile">
             <select id="list-switcher-mobile" class="form-control list-select-input" onchange="window.location.href='/lists/' + this.value">
